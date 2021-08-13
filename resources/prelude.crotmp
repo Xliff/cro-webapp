@@ -46,7 +46,7 @@
     <?{ .type eq 'text' || .type eq 'email' || .type eq 'search' || .type eq 'url' || .type eq 'tel' }>
       <div<&class($input-group-class)>>
         <label for="<.name>"<&class($input-label-class)>><.label></label>
-        <input type="<.type>" name="<.name>" id="<.name>"<&control-class($_, $input-control-class, :$is-invalid-class)><&str-opts($_)><?.<value>.defined()> value="<.value>"</?>>
+        <input type="<.type>" name="<.name>" <?.read-only>disabled</?> id="<.name>"<&control-class($_, $input-control-class, :$is-invalid-class)><&str-opts($_)><?.<value>.defined()> value="<.value>"</?>>
         <&control-help($_, :$help-class)>
         <&control-validation-message($_, :$invalid-feedback-class)>
       </div>
