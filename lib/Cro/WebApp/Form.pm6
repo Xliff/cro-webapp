@@ -156,11 +156,6 @@ multi trait_mod:<is>(Attribute:D $attr, Real :$min! --> Nil) is export {
     $attr.webapp-form-min = $min;
 }
 
-multi trait_mod:<is>(Attribute:D $attr, Bool :$read-only --> Nil) is export {
-    ensure-attr-state($attr);
-    $attr.webapp-form-ro = $read-only;
-}
-
 multi trait_mod:<is>(Attribute:D $attr, Bool :$form-read-only! --> Nil) is export {
     ensure-attr-state($attr);
     $attr.webapp-form-ro = $form-read-only;
