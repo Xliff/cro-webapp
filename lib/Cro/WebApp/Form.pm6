@@ -14,6 +14,7 @@ my role FormProperties {
     has Real $.webapp-form-min is rw;
     has Real $.webapp-form-max is rw;
     has Bool $.webapp-form-ro is rw;
+    has Bool $.webapp-form-not-shown is rw;
     has List @.webapp-form-validations;
 }
 
@@ -159,6 +160,16 @@ multi trait_mod:<is>(Attribute:D $attr, Real :$min! --> Nil) is export {
 multi trait_mod:<is>(Attribute:D $attr, Bool :$form-read-only! --> Nil) is export {
     ensure-attr-state($attr);
     $attr.webapp-form-ro = $form-read-only;
+}
+
+multi trait_mod:<is>(Attribute:D $attr, Bool :$form-not-shown! --> Nil) is export {
+    ensure-attr-state($attr);
+    $attr.webapp-form-not-shown = $form-not-shown;
+}
+
+multi trait_mod:<is>(Attribute:D $attr, Bool :$invisible! --> Nil) is export {
+    ensure-attr-state($attr);
+    $attr.webapp-form-ro = $invisible;
 }
 
 #| Set the maximum numeric value of an input field
@@ -392,6 +403,8 @@ role Cro::WebApp::Form {
             }
         }
         for self.^attributes.grep(*.has_accessor) -> Attribute $attr {
+            next if $attr.?webapp-form-not-shown;
+
             my ($control-type, %properties) = self!calculate-control-type($attr);
             my $name = $attr.name.substr(2);
             my %control =
@@ -497,7 +510,16 @@ role Cro::WebApp::Form {
         with $attr.get_value(self) {
             when Date { %properties<value> = .yyyy-mm-dd; }
 
-            when DateTime { %properties<value> .= Str }
+            when DateTime {
+              # datetime-local wants value in the form of:
+              #   YYYY-MM-DDTHH:MM:SS
+              # So the .SSS-OH:OM have to be removed
+              my $ts = .Str;
+              my $cutoff = $ts.rindex(".") // $ts.rindex("-") // $ts.rindex("+");
+              my $i  = $ts.chars - $cutoff;
+              $ts .= substr(0, * - $i);
+              %properties<value> = $ts;
+            }
 
             default { %properties<value> = $_; }
         }
