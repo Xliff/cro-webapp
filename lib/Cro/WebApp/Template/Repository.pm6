@@ -19,9 +19,25 @@ class Cro::WebApp::Template::Compiled is implementation-detail {
     # Implementation details.
     has &.renderer;
     has %.exports;
+    has $.sub;
 
     #| Renders the template, setting the provided argument as the topic.
     method render($topic --> Str) {
+	CATCH {
+		default {
+			say qq:to/ERROR/;
+			  \nException:
+            '{ .message }'
+        ...occurred in the following compiled template:
+
+			  { $!sub }
+			  --------------------------
+			  Backtrace:
+		    { .backtrace.concise }
+        ERROR
+		}
+	}
+
         my $*TEMPLATE-REPOSITORY = $!repository;
         &!renderer($topic)
     }

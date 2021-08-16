@@ -24,8 +24,9 @@ my class Template does ContainerNode is export {
             %*TEMPLATE-EXPORTS<macro>{$r.name.substr('__TEMPLATE_MACRO__'.chars)} = $r;
         }
         my %*TEMPLATE-EXPORTS = :sub{}, :macro{};
-        my $renderer = EVAL 'sub ($_) { join "", (' ~ $children-compiled ~ ') }';
-        return { :$renderer, exports => %*TEMPLATE-EXPORTS };
+        my $sub = 'sub ($_) { join "", (' ~ $children-compiled ~ ') }';
+        my $renderer = EVAL $sub;
+        return { :$sub, :$renderer, exports => %*TEMPLATE-EXPORTS };
     }
 }
 
