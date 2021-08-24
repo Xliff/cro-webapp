@@ -511,14 +511,14 @@ role Cro::WebApp::Form {
             when Date { %properties<value> = .yyyy-mm-dd; }
 
             when DateTime {
-              # datetime-local wants value in the form of:
-              #   YYYY-MM-DDTHH:MM:SS
-              # So the .SSS-OH:OM have to be removed
-              my $ts = .Str;
-              my $cutoff = $ts.rindex(".") // $ts.rindex("-") // $ts.rindex("+");
-              my $i  = $ts.chars - $cutoff;
-              $ts .= substr(0, * - $i);
-              %properties<value> = $ts;
+                # datetime-local wants value in the form of:
+                #   YYYY-MM-DDTHH:MM:SS
+                # So the .SSS-OH:OM have to be removed
+                my $ts = .Str;
+                my $cutoff = $ts.rindex(".") // $ts.rindex("-") // $ts.rindex("+");
+                my $i  = $ts.chars - $cutoff;
+                $ts .= substr(0, * - $i);
+                %properties<value> = $ts;
             }
 
             default { %properties<value> = $_; }
