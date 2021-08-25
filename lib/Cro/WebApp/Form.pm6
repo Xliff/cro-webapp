@@ -402,7 +402,11 @@ role Cro::WebApp::Form {
                 %validation-by-control{.input // ''}.push($_);
             }
         }
-        for self.^attributes.grep(*.has_accessor) -> Attribute $attr {
+        my @attributes = self.^mro
+                             .reverse
+                             .map({ |.^attributes(:local) })
+                             .grep( *.has_accessor );
+        for @attributes -> Attribute $attr {
             next if $attr.?webapp-form-not-shown;
 
             my ($control-type, %properties) = self!calculate-control-type($attr);
