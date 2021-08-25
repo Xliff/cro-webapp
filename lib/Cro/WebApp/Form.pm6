@@ -511,13 +511,22 @@ role Cro::WebApp::Form {
             when Date { %properties<value> = .yyyy-mm-dd; }
 
             when DateTime {
-                # datetime-local wants value in the form of:
-                #   YYYY-MM-DDTHH:MM:SS
-                # So the .SSS-OH:OM have to be removed
+                # Fractional seconds and Timezone must be dropped for
+                # datetime-local form element, or the value will not be
+                # displayed.
+                #
+                # This means that:
+                #   YYYY-MM-DDTHH:MM:SS.SSS-0000
+                # Has to become:
+                #  YYYY-MM-DDTHH:MM:SS
                 my $ts = .Str;
-                my $cutoff = $ts.rindex(".") // $ts.rindex("-") // $ts.rindex("+");
-                my $i  = $ts.chars - $cutoff;
-                $ts .= substr(0, * - $i);
+                if $ts.ends-with('Z') {
+                    $ts ~~ s/ '.' \d+? 'Z' /Z/;
+                } else {
+                    my $cutoff = $ts.rindex(".") // $ts.rindex("-") // $ts.rindex("+");
+                    my $i  = $ts.chars - $cutoff;
+                    $ts .= substr(0, * - $i);
+                }
                 %properties<value> = $ts;
             }
 

@@ -78,6 +78,10 @@ my class VariableAccess does Node is export {
     }
 }
 
+my role Argument does Node is export {
+    has Node $.argument;
+}
+
 my class SmartDeref does Node is export {
     has Node $.target is required;
     has Str $.symbol is required;
@@ -92,9 +96,10 @@ my class SmartDeref does Node is export {
 my class LiteralMethodDeref does Node is export {
     has Node $.target is required;
     has Str $.symbol is required;
+    has Argument @.arguments;
 
     method compile() {
-        '(' ~ $!target.compile ~ ').' ~ $!symbol ~ '()'
+        '(' ~ $!target.compile ~ ').' ~ $!symbol ~ '(' ~ @!arguments.map(*.compile).join(", ") ~ ')'
     }
 }
 
@@ -165,10 +170,6 @@ my class TemplateSub does ContainerNode is export {
             "} && '')\n"
         }
     }
-}
-
-my role Argument does Node is export {
-    has Node $.argument;
 }
 
 my class ByPosArgument does Argument is export {
