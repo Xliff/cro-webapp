@@ -187,6 +187,20 @@ multi trait_mod:<will>(Attribute:D $attr, &block, :$select! --> Nil) is export {
     $attr.webapp-form-select = &block;
 }
 
+multi trait_mod:<is>(Attribute:D $attr, :$default-select! --> Nil) is export {
+  ensure-attr-state($attr);
+  $attr.webapp-form-select = -> $, $_ {
+    .WHY.trailing.split(' | ').map({
+      my $s = .split(/\s+ '=>' \s+/);
+      do if $s ~~ Positional {
+        Pair.new( |$s );
+      } else {
+        $_
+      }
+    })
+  }
+}
+
 #| Describe how a field is validated. Two arguments are expected to the
 #| trait: something the value will be smart-matched against, and the
 #| error message for if the validation fails.
@@ -544,7 +558,7 @@ role Cro::WebApp::Form {
 
     method !calculate-options(Attribute $attr, &option-producer) {
         my @current := $attr.get_value(self).list;
-        [option-producer(self).list.map: -> $opt {
+        [option-producer(self, $attr).list.map: -> $opt {
             my ($key, $value);
             if $opt ~~ Pair {
                 $key = $opt.key;
