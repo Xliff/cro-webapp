@@ -121,14 +121,22 @@ my class HashKeyDeref does Node is export {
     }
 }
 
+my class Separator does ContainerNode is export {
+    method compile() {
+        '(' ~ @!children.map(*.compile).join(", ") ~ ').join'
+    }
+}
+
 my class Iteration does ContainerNode is export {
     has Node $.target is required;
+    has Separator $.separator;
     has $.iteration-variable;
 
     method compile() {
         my $variable = $!iteration-variable.?name // '$_';
         my $children-compiled = @!children.map(*.compile).join(", ");
-        '(' ~ $!target.compile ~ ').map(-> ' ~ $variable  ~ ' { join "", (' ~ $children-compiled ~ ') }).join'
+        '(' ~ $!target.compile ~ ').map(-> ' ~ $variable  ~ ' { join "", (' ~ $children-compiled ~ ') }).join' ~
+                ($!separator ?? '(' ~ $!separator.compile() ~ ')' !! '')
     }
 }
 
@@ -297,17 +305,27 @@ my class Expression does Node is export {
 
 my class EscapeText does Node is export {
     has Node $.target;
+    has Mu $.filename;
+    has Mu $.line;
 
     method compile() {
-        'escape-text(' ~ $!target.compile() ~ ')'
+        'escape-text(' ~ $!target.compile() ~ ", '$!filename.Str()', $!line)";
     }
 }
 
 my class EscapeAttribute does Node is export {
     has Node $.target;
+    has Mu $.filename;
+    has Mu $.line;
 
     method compile() {
-        'escape-attribute(' ~ $!target.compile() ~ ')'
+        'escape-attribute(' ~ $!target.compile() ~ ", '$!filename.Str()', $!line)";
+    }
+}
+
+my class Nothing does Node is export {
+    method compile() {
+        "''"
     }
 }
 
@@ -319,12 +337,22 @@ my constant %escapes = %(
     "'" => '&apos;',
 );
 
-sub escape-text(Str() $text) {
-    $text.subst(/<[<>&]>/, { %escapes{.Str} }, :g)
+multi escape-text(Mu:U $t, Mu $file, Mu $line) {
+    %*WARNINGS{"An expression at $file:$line evaluated to $t.^name()"}++;
+    ''
 }
 
-sub escape-attribute(Str() $attr) {
-    $attr.subst(/<[&"']>/, { %escapes{.Str} }, :g)
+multi escape-text(Mu:D $text, Mu $, Mu $) {
+    $text.Str.subst(/<[<>&]>/, { %escapes{.Str} }, :g)
+}
+
+multi escape-attribute(Mu:U $t, Mu $file, Mu $line) {
+    %*WARNINGS{"An expression at $file:$line evaluted to $t.^name()"}++;
+    ''
+}
+
+multi escape-attribute(Mu:D $attr, Mu $, Mu $) {
+    $attr.Str.subst(/<[&"']>/, { %escapes{.Str} }, :g)
 }
 
 sub template-part-args(Str $name) {

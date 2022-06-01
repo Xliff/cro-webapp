@@ -51,7 +51,7 @@ use Test;
                         type => 'text',
                         name => 'title',
                         label => 'Title',
-                        required => True
+                        required => True,
                     },
                     {
                         type => 'textarea',
@@ -210,7 +210,7 @@ use Test;
             },
             'Form with DateTime type attribute renders a datetime-local control';
 
-    my $dt = DateTime.now.utc;
+    my $dt = DateTime.now.utc.truncated-to('second');
     my $formatted-now = sprintf(
         '%4d-%02d-%02dT%02d:%02d:%02dZ',
         .year, .month, .day, .hour, .minute, .second
@@ -588,7 +588,7 @@ use Test;
                         label => 'Some custom label',
                         placeholder => 'type here',
                         help => 'Just a hint',
-                        required => False,
+                        required => False
                     },
                 ]
             },

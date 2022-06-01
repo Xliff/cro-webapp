@@ -22,29 +22,27 @@ class Cro::WebApp::Template::Compiled is implementation-detail {
     has $.sub;
 
     #| Renders the template, setting the provided argument as the topic.
-    multi method render (*%topic --> Str) {
+    multi method render(*%topic --> Str) {
       samewith(%topic);
     }
-
     multi method render($topic --> Str) {
-	CATCH {
-		default {
-			say qq:to/ERROR/;
-			  \nException:
-            '{ .message }'
-        ...occurred in the following compiled template:
+    	CATCH {
+    		default {
+    			say qq:to/ERROR/;
+    			  \nException:
+                '{ .message }'
+            ...occurred in the following compiled template:
 
-			  { $!sub }
-			  --------------------------
-			  Backtrace:
-		    { .backtrace.concise }
-        ERROR
-		}
-    
-	}
+    			  { $!sub }
+    			  --------------------------
+    			  Backtrace:
+    		    { .backtrace.concise }
+            ERROR
+    		}
+    	}
 
-        my $*TEMPLATE-REPOSITORY = $!repository;
-        &!renderer($topic)
+      my $*TEMPLATE-REPOSITORY = $!repository;
+      &!renderer($topic)
     }
 }
 
