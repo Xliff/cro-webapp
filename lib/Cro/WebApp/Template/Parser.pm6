@@ -102,6 +102,10 @@ grammar Cro::WebApp::Template::Parser {
         [ <?{ $*lone-end-line }> [ \h* \n | { $*lone-end-line = False } ] ]?
     }
 
+    token sigil-tag:sym<comment> {
+      '<#>' .+? '</#>'
+    }
+
     token sigil-tag:sym<separator> {
         :my $opener = $¢.clone;
         :my $*lone-start-line = False;
