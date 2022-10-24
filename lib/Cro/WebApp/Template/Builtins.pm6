@@ -15,3 +15,7 @@ sub __TEMPLATE_SUB__HTML(Str() $html) is export {
 sub __TEMPLATE_SUB__HTML-AND-JAVASCRIPT(Str() $html) is export {
     $html
 }
+
+sub __TEMPLATE_SUB__MERGESPACES(Str() $text) is export {
+    $text.subst(/\s+/, ' ', :g);
+}
