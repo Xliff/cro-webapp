@@ -202,7 +202,6 @@ sub load-template(
         my Cro::WebApp::Template::Location @*TEMPLATE-LOCATIONS = @locations;
         my $source = $prepend ~ $abs-path.slurp ~ $append;
         my $*TEMPLATE-FILE = $abs-path;
-        my $source = $abs-path.slurp;
         my $ast = Cro::WebApp::Template::Parser.parse($source, actions => Cro::WebApp::Template::ASTBuilder).ast;
         Cro::WebApp::Template::Compiled.new(|$ast.compile, repository => $template-repo, :path($abs-path))
     }
