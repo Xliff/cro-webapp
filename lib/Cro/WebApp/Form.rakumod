@@ -581,8 +581,8 @@ role Cro::WebApp::Form {
     }
 
     method !calculate-options(Attribute $attr, &option-producer) {
-        my @current := $attr.get_value(self).list;
-        [option-producer(self, $attr).list.map: -> $opt {
+        my @current := $attr.get_value(self).Array;
+        [option-producer(self).list.map: -> $opt {
             my ($key, $value);
             if $opt ~~ Pair {
                 $key = $opt.key;
@@ -591,7 +591,7 @@ role Cro::WebApp::Form {
             else {
                 $key = $value = $opt;
             }
-            $key (elem) @current ?? ($key, $value, True) !! ($key, $value)
+            $key eq @current.any ?? ($key, $value, True) !! ($key, $value);
         }]
     }
 
