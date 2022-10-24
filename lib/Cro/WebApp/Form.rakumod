@@ -315,10 +315,16 @@ role Cro::WebApp::Form {
         self.CREATE
     }
 
+    #| Get the attributes involved in the form, sorted most deeply
+    #| inherited first.
+    method !form-attributes() {
+        self.^mro.reverse.map(*.^attributes(:local)).flat.grep(*.has_accessor)
+    }
+
     #| Return the form data as a hash
     method form-data() {
         my %values;
-        for self.^attributes.grep(*.has_accessor) -> Attribute $attr {
+        for self!form-attributes() -> Attribute $attr {
             my $name = $attr.name.substr(2);
             %values{$name} = $attr.get_value(self);
         }
@@ -457,7 +463,7 @@ role Cro::WebApp::Form {
             @controls.push(%control);
         }
         self!add-csrf-protection(@controls) if $method eq 'post';
-        my %enctype = any(self.^attributes.map(*.?webapp-form-type).grep(*.defined)) eq 'file' ?? enctype => "multipart/form-data" !! Empty;
+        my %enctype = any(self!form-attributes().map(*.?webapp-form-type).grep(*.defined)) eq 'file' ?? enctype => "multipart/form-data" !! Empty;
         my %rendered := { :@controls, was-validated => $!validation-state.defined, |%enctype };
         if %validation-by-control{''} -> @errors {
             %rendered<validation-errors> = [@errors.map(*.message)];
@@ -701,7 +707,7 @@ role Cro::WebApp::Form {
         self!check-csrf-token();
 
         # Add per field validation errors.
-        for self.^attributes.grep(*.has_accessor) -> Attribute $attr {
+        for self!form-attributes() -> Attribute $attr {
             my $name = $attr.name.substr(2);
             my $value = $attr.get_value(self);
             my $type = $attr.type;

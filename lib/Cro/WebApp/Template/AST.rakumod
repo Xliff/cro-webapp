@@ -3,7 +3,7 @@ use Cro::WebApp::Template::Builtins;
 
 unit module Cro::WebApp::Template::AST;
 
-role Node {
+role Node is export {
     has Bool $.trim-trailing-horizontal-before = False;
     method compile() { ... }
 }
@@ -13,6 +13,8 @@ my role ContainerNode does Node {
 }
 
 my class Template does ContainerNode is export {
+    has @.used-files;
+
     method compile() {
         my $*IN-SUB = False;
         my $children-compiled = @!children.map(*.compile).join(", ");
@@ -24,9 +26,8 @@ my class Template does ContainerNode is export {
             %*TEMPLATE-EXPORTS<macro>{$r.name.substr('__TEMPLATE_MACRO__'.chars)} = $r;
         }
         my %*TEMPLATE-EXPORTS = :sub{}, :macro{};
-        my $sub = 'sub ($_) { join "", (' ~ $children-compiled ~ ') }';
-        my $renderer = EVAL $sub;
-        return { :$sub, :$renderer, exports => %*TEMPLATE-EXPORTS };
+        my $renderer = EVAL 'sub ($_) { join "", (' ~ $children-compiled ~ ') }';
+        return Map.new((:$renderer, exports => %*TEMPLATE-EXPORTS, :@!used-files));
     }
 }
 
@@ -143,13 +144,21 @@ my class Iteration does ContainerNode is export {
 my class Condition does ContainerNode is export {
     has Node $.condition is required;
     has Bool $.negated = False;
+    has Node $.else;
 
     method compile() {
         my $cond = '(' ~ $!condition.compile ~ ')';
         my $if-true = '(' ~ @!children.map(*.compile).join(", ") ~ ').join';
+        my $else = $!else ?? '(' ~ $!else.compile ~ ')' !! "''";
         $!negated
-            ?? "$cond ?? '' !! $if-true"
-            !! "$cond ?? $if-true !! ''"
+            ?? "$cond ?? $else !! $if-true"
+            !! "$cond ?? $if-true !! $else"
+    }
+}
+
+my class Else does ContainerNode is export {
+    method compile() {
+        '(' ~ @!children.map(*.compile).join(", ") ~ ').join'
     }
 }
 
@@ -255,7 +264,7 @@ my class Sequence does ContainerNode is export {
 }
 
 my class UseFile does Node is export {
-    has Str $.template-name is required;
+    has IO::Path $.path is required;
     has @.exported-subs;
     has @.exported-macros;
 
@@ -263,8 +272,8 @@ my class UseFile does Node is export {
         my $decls = join ",", flat
                 @!exported-subs.map(-> $sym { '(my &__TEMPLATE_SUB__' ~ $sym ~ ' = .<sub><' ~ $sym ~ '>)' }),
                 @!exported-macros.map(-> $sym { '(my &__TEMPLATE_MACRO__' ~ $sym ~ ' = .<macro><' ~ $sym ~ '>)' });
-        '(BEGIN (((' ~ $decls ~ ') given await($*TEMPLATE-REPOSITORY.resolve(\'' ~
-                $!template-name ~ '\')).exports) && ""))'
+        '(BEGIN (((' ~ $decls ~ ') given await($*TEMPLATE-REPOSITORY.resolve-absolute(\'' ~
+                $!path.absolute ~ '\'.IO)).exports) && ""))'
     }
 }
 

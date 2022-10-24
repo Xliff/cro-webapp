@@ -21,6 +21,7 @@ grammar Cro::WebApp::Template::Parser {
     token TOP {
         :my $*IN-ATTRIBUTE = False;
         :my $*IN-MACRO = False;
+        :my @*USED-FILES;
         <sequence-element>*
         [ $ || <.panic: 'confused'> ]
     }
@@ -54,6 +55,10 @@ grammar Cro::WebApp::Template::Parser {
         <sigil-tag>
     }
 
+    token sigil-tag:sym<comment> {
+      '<#>' .+? '</#>'
+    }
+
     token tag-element:sym<literal> {
         | '!--' .*? '--' <?before '>'>
         | <-[<>]>+
@@ -85,11 +90,9 @@ grammar Cro::WebApp::Template::Parser {
         | $<variable>=['$' <.identifier>] ['.' <deref>]?
         || <.malformed: 'iteration tag'>
         ]
-        \h*
-        [
-        ||  [':' \h* <iteration-variable=.parameter(:!allow-named, :!allow-default)>]? \h* '>'
-        || <.malformed('iteration tag')>
-        ]
+        [\h* ':' \h* <iteration-variable=.parameter(:!allow-named, :!allow-default)>]?
+        [ \h+ <structural-tag> ]?
+        [ \h* '>' || <.malformed: 'iteration tag'> ]
         [ <?{ $*lone-start-line }> [ \h* \n | { $*lone-start-line = False } ] ]?
 
         <sequence-element('iteration')>*
@@ -142,12 +145,8 @@ grammar Cro::WebApp::Template::Parser {
         :my $*lone-start-line = False;
         '<' $<negate>=<[?!]>
         [ <?after [^ | $ | \n] \h* '<' <[?!]>> { $*lone-start-line = True } ]?
-        [
-        | '.' <deref>
-        | '$' <identifier> ['.' <deref>]?
-        | '{' <expression> [ '}' || <.panic('malformed expression')> ]
-        || <.malformed: 'condition tag'>
-        ]
+        <condition>
+        [ \h+ <structural-tag> ]?
         [ \h* '>' || <.malformed: 'condition tag'> ]
         [ <?{ $*lone-start-line }> [ \h* \n | { $*lone-start-line = False } ] ]?
 
@@ -159,6 +158,70 @@ grammar Cro::WebApp::Template::Parser {
         <close-ident=.ident>?
         [ \h* '>' || <.malformed: 'condition closing tag'> ]
         [ <?{ $*lone-end-line }> [ \h* \n | { $*lone-end-line = False } ] ]?
+
+        [
+        || <?before \s* '<!?'>
+           [ { $<negate> eq '?' } || <.panic('cannot have elsif parts on a negated conditional tag')> ]
+           \s* <else=.elsif>
+        || <?before \s* '<!' [\s | \h* '>']>
+           [ { $<negate> eq '?' } || <.panic('cannot have else parts on a negated conditional tag')> ]
+           \s* <else>
+        ]?
+    }
+
+    token elsif {
+        :my $opener = $¢.clone;
+        :my $*lone-start-line = False;
+        '<!?'
+        [ <?after [^ | $ | \n] \h* '<!?'> { $*lone-start-line = True } ]?
+        <condition>
+        [ \h+ <structural-tag> ]?
+        [ \h* '>' || <.malformed: 'condition tag'> ]
+        [ <?{ $*lone-start-line }> [ \h* \n | { $*lone-start-line = False } ] ]?
+
+        <sequence-element>*
+
+        :my $*lone-end-line = False;
+        [ '</?>' || { $opener.unclosed('condition tag') } ]
+        [ <?after \n \h* '</?>'> { $*lone-end-line = True } ]?
+        [ <?{ $*lone-end-line }> [ \h* \n | { $*lone-end-line = False } ] ]?
+
+        [
+        || <?before \s* '<!?'>
+           \s* <else=.elsif>
+        || <?before \s* '<!' [\s | \h* '>']>
+           \s* <else>
+        ]?
+    }
+
+    token else {
+        :my $opener = $¢.clone;
+        :my $*lone-start-line = False;
+        '<!'
+        [ <?after [^ | $ | \n] \h* '<!'> { $*lone-start-line = True } ]?
+        [ \h+ <structural-tag> ]?
+        [ \h* '>' || <.malformed: 'condition tag'> ]
+        [ <?{ $*lone-start-line }> [ \h* \n | { $*lone-start-line = False } ] ]?
+
+        <sequence-element>*
+
+        :my $*lone-end-line = False;
+        [ '</!>' || { $opener.unclosed('condition tag') } ]
+        [ <?after \n \h* '</!>'> { $*lone-end-line = True } ]?
+        [ <?{ $*lone-end-line }> [ \h* \n | { $*lone-end-line = False } ] ]?
+    }
+
+    token condition {
+        | '.' <deref>
+        | '$' <identifier> ['.' <deref>]?
+        | '{' <expression> [ '}' || <.panic('malformed expression')> ]
+        || <.malformed: 'condition tag'>
+    }
+
+    token structural-tag {
+        <tag=.ident>
+        :my $*IN-ATTRIBUTE = True;
+        <tag-element>*
     }
 
     token sigil-tag:sym<call> {

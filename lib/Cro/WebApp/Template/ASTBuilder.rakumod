@@ -46,7 +46,9 @@ class Cro::WebApp::Template::ASTBuilder {
                     exported-subs => $loaded-prelude.exports<sub>.keys,
                     exported-macros => $loaded-prelude.exports<macro>.keys;
         }
-        make Template.new(children => [|@prelude, |flatten-literals($<sequence-element>.map(*.ast))]);
+        make Template.new:
+                children => [|@prelude, |flatten-literals($<sequence-element>.map(*.ast))],
+                used-files => @*USED-FILES;
     }
 
     method sequence-element:sym<sigil-tag>($/) {
@@ -101,7 +103,7 @@ class Cro::WebApp::Template::ASTBuilder {
         my $iteration-variable = $<iteration-variable>.ast;
         make Iteration.new:
             :$target,  :$iteration-variable, :separator($*SEPARATOR // Separator),
-            children => flatten-literals($<sequence-element>.map(*.ast),
+            children => flatten-literals(add-structural-tag($/, $<sequence-element>.map(*.ast)),
                 :trim-trailing-horizontal($*lone-end-line)),
             trim-trailing-horizontal-before => $*lone-start-line;
     }
@@ -115,22 +117,55 @@ class Cro::WebApp::Template::ASTBuilder {
     }
 
     method sigil-tag:sym<condition>($/) {
-        my $condition = do if $<deref> {
-            my $derefer = $<deref>.ast;
-            $derefer(VariableAccess.new(name => $<identifier> ?? '$' ~ $<identifier> !! '$_'))
-        }
-        elsif $<identifier> {
-            VariableAccess.new(name => '$' ~ $<identifier>)
-        }
-        else {
-            $<expression>.ast
-        }
+        my Node $else-part = $<else> ?? $<else>.ast !! Nil;
         make Condition.new:
             negated => $<negate> eq '!',
-            condition => $condition,
-            children => flatten-literals($<sequence-element>.map(*.ast),
+            condition => $<condition>.ast,
+            children => flatten-literals(add-structural-tag($/, $<sequence-element>.map(*.ast)),
                 :trim-trailing-horizontal($*lone-end-line)),
-            trim-trailing-horizontal-before => $*lone-start-line;
+            trim-trailing-horizontal-before => $*lone-start-line,
+            else => $else-part;
+    }
+
+    method condition($/) {
+        if $<deref> {
+            my $derefer = $<deref>.ast;
+            make $derefer(VariableAccess.new(name => $<identifier> ?? '$' ~ $<identifier> !! '$_'));
+        }
+        elsif $<identifier> {
+            make VariableAccess.new(name => '$' ~ $<identifier>);
+        }
+        else {
+            make $<expression>.ast;
+        }
+    }
+
+    method elsif($/) {
+        my Node $else-part = $<else> ?? $<else>.ast !! Nil;
+        make Condition.new:
+                condition => $<condition>.ast,
+                children => flatten-literals(add-structural-tag($/, $<sequence-element>.map(*.ast)),
+                        :trim-trailing-horizontal($*lone-end-line)),
+                trim-trailing-horizontal-before => $*lone-start-line,
+                else => $else-part;
+    }
+
+    method else($/) {
+        make Else.new:
+                children => flatten-literals(add-structural-tag($/, $<sequence-element>.map(*.ast)),
+                        :trim-trailing-horizontal($*lone-end-line)),
+                trim-trailing-horizontal-before => $*lone-start-line;
+    }
+
+    sub add-structural-tag($/, \children) {
+        with $<structural-tag> {
+            flat Literal.new(text => '<' ~ .<tag>), .<tag-element>.map(*.ast), Literal.new(text => '>'),
+                children,
+                    Literal.new(text => '</' ~ .<tag> ~ '>')
+        }
+        else {
+            children
+        }
     }
 
     method sigil-tag:sym<sub>($/) {
@@ -182,8 +217,9 @@ class Cro::WebApp::Template::ASTBuilder {
     method sigil-tag:sym<use>($/) {
         with $<file> {
             my $template-name = .ast;
-            my $used = await $*TEMPLATE-REPOSITORY.resolve($template-name);
-            make UseFile.new: :$template-name,
+            my $used = await $*TEMPLATE-REPOSITORY.resolve($template-name, @*TEMPLATE-LOCATIONS);
+            @*USED-FILES.push($used);
+            make UseFile.new: :path($used.path),
                     exported-subs => $used.exports<sub>.keys,
                     exported-macros => $used.exports<macro>.keys;
         }
