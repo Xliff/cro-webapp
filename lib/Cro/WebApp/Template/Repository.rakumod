@@ -28,7 +28,10 @@ class Cro::WebApp::Template::Compiled is implementation-detail {
     has %.exports;
 
     #| Renders the template, setting the provided argument as the topic.
-    method render($topic --> Str) {
+    multi method render(*%topic --> Str) {
+        samewith(%topic);
+    }
+    multi method render($topic --> Str) {
         my $*TEMPLATE-REPOSITORY = $!repository;
         &!renderer($topic)
     }
@@ -172,12 +175,19 @@ sub set-template-repository(Cro::WebApp::Template::Repository $repository --> Ni
 }
 
 #| Load a template from the given C<IO>.
-sub load-template(IO() $abs-path, :@locations --> Cro::WebApp::Template::Compiled) is export {
+sub load-template(
+    IO() $abs-path,
+    Str() :$prepend = '',
+    Str() :$append  = '',
+    :@locations --> Cro::WebApp::Template::Compiled
+)
+    is export
+{
     Cro::WebApp::LogTimeline::CompileTemplate.log: :template($abs-path.relative), {
         my $*TEMPLATE-REPOSITORY = $template-repo;
         my Cro::WebApp::Template::Location @*TEMPLATE-LOCATIONS = @locations;
         my $*TEMPLATE-FILE = $abs-path;
-        my $source = $abs-path.slurp;
+        my $source = $prepend ~ $abs-path.slurp ~ $append;
         my $ast = Cro::WebApp::Template::Parser.parse($source, actions => Cro::WebApp::Template::ASTBuilder).ast;
         Cro::WebApp::Template::Compiled.new(|$ast.compile, repository => $template-repo, :path($abs-path))
     }
