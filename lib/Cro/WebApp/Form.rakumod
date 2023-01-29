@@ -158,6 +158,21 @@ multi trait_mod:<is>(Attribute:D $attr, Real :$min! --> Nil) is export {
     $attr.webapp-form-min = $min;
 }
 
+multi trait_mod:<is>(Attribute:D $attr, Bool :$form-read-only! --> Nil) is export {
+    ensure-attr-state($attr);
+    $attr.webapp-form-ro = $form-read-only;
+}
+
+multi trait_mod:<is>(Attribute:D $attr, Bool :$form-not-shown! --> Nil) is export {
+    ensure-attr-state($attr);
+    $attr.webapp-form-not-shown = $form-not-shown;
+}
+
+multi trait_mod:<is>(Attribute:D $attr, Bool :$invisible! --> Nil) is export {
+    ensure-attr-state($attr);
+    $attr.webapp-form-ro = $invisible;
+}
+
 #| Set the maximum numeric value of an input field
 multi trait_mod:<is>(Attribute:D $attr, Real :$max! --> Nil) is export {
     ensure-attr-state($attr);
@@ -350,9 +365,11 @@ role Cro::WebApp::Form {
         my %form-data := $body.hash;
         my %values;
         my %unparseable;
-        for self!form-attributes() -> Attribute $attr {
+
+        for self.^attributes.grep(*.has_accessor) -> Attribute $attr {
             my $name = $attr.name.substr(2);
             my $value := %form-data{$name};
+
             if $attr.type ~~ Positional {
                 my $value-type = $attr.type.of;
                 my @values := $value ~~ Cro::HTTP::MultiValue ?? $value.list !!
@@ -443,12 +460,17 @@ role Cro::WebApp::Form {
                 %validation-by-control{.input // ''}.push($_);
             }
         }
-        for self!form-attributes() -> Attribute $attr {
+
+        my @attributes = self.^mro
+                             .reverse
+                             .map({ |.^attributes(:local) })
+                             .grep( *.has_accessor );
+        for @attributes -> Attribute $attr {
             next if $attr.?webapp-form-not-shown;
 
             my ($control-type, %properties) = self!calculate-control-type($attr);
             my $name = $attr.name.substr(2);
-            die X::Cro::WebApp::Form::FileInGET.new :form(::?CLASS.^name) :element($name)
+            die X::Cro::WebApp::Fosrm::FileInGET.new :form(::?CLASS.^name) :element($name)
                 if $control-type eq 'file' && $method eq 'get';
             my %control =
                     :$name,
@@ -585,7 +607,7 @@ role Cro::WebApp::Form {
     }
 
     method !calculate-options(Attribute $attr, &option-producer) {
-        my @current := $attr.get_value(self).list;
+        my @current := $attr.get_value(self).Array;
         [option-producer(self).list.map: -> $opt {
             my ($key, $value);
             if $opt ~~ Pair {
@@ -595,7 +617,7 @@ role Cro::WebApp::Form {
             else {
                 $key = $value = $opt;
             }
-            $key (elem) @current ?? ($key, $value, True) !! ($key, $value)
+            $key eq @current.any ?? ($key, $value, True) !! ($key, $value);
         }]
     }
 
