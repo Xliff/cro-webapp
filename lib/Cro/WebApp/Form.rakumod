@@ -16,6 +16,7 @@ my role FormProperties {
     has Bool $.webapp-form-ro is rw;
     has Bool $.webapp-form-not-shown is rw;
     has List @.webapp-form-validations;
+    has Bool $.webapp-form-checkbox-right is rw;
 }
 
 #| Ensure that the attribute has the FormProperties mixin.
@@ -178,6 +179,26 @@ multi trait_mod:<is>(Attribute:D $attr, Real :$max! --> Nil) is export {
     $attr.webapp-form-max = $max;
 }
 
+multi trait_mod:<is>(Attribute:D $attr, Bool :$form-read-only! --> Nil) is export {
+    ensure-attr-state($attr);
+    $attr.webapp-form-ro = $form-read-only;
+}
+
+multi trait_mod:<is>(Attribute:D $attr, Bool :$form-not-shown! --> Nil) is export {
+    ensure-attr-state($attr);
+    $attr.webapp-form-not-shown = $form-not-shown;
+}
+
+multi trait_mod:<is>(Attribute:D $attr, Bool :$invisible! --> Nil) is export {
+    ensure-attr-state($attr);
+    $attr.webapp-form-ro = $invisible;
+}
+
+multi trait_mod:<is>(Attribute:D $attr, Bool :$form-checkbox-right! --> Nil) is export {
+    ensure-attr-state($attr);
+    $attr.webapp-form-checkbox-right = $form-checkbox-right;
+}
+
 #| Provide code that will be run in order to produce the values to select from. Should
 #| return a list of Pair objects, where the key is the selected value and the value is
 #| the text to display. If non-Pairs are in the list, a Pair with the same key and value
@@ -189,15 +210,17 @@ multi trait_mod:<will>(Attribute:D $attr, &block, :$select! --> Nil) is export {
 
 multi trait_mod:<is>(Attribute:D $attr, :$default-select! --> Nil) is export {
   ensure-attr-state($attr);
-  $attr.webapp-form-select = -> $, $_ {
-    .WHY.trailing.split(' | ').map({
-      my $s = .split(/\s+ '=>' \s+/);
-      do if $s ~~ Positional {
-        Pair.new( |$s );
-      } else {
-        $_
-      }
-    })
+  $attr.webapp-form-select = -> $ {
+    if $attr.WHY.trailing -> $w {
+      $w.split(' | ').map({
+        my $s = .split(/\s+ '=>' \s+/);
+        do if $s ~~ Positional {
+          Pair.new( |$s );
+        } else {
+          $_
+        }
+      })
+    }
   }
 }
 
@@ -437,6 +460,7 @@ role Cro::WebApp::Form {
                 %validation-by-control{.input // ''}.push($_);
             }
         }
+
         my @attributes = self.^mro
                              .reverse
                              .map({ |.^attributes(:local) })
@@ -446,13 +470,14 @@ role Cro::WebApp::Form {
 
             my ($control-type, %properties) = self!calculate-control-type($attr);
             my $name = $attr.name.substr(2);
-            die X::Cro::WebApp::Form::FileInGET.new :form(::?CLASS.^name) :element($name)
+            die X::Cro::WebApp::Fosrm::FileInGET.new :form(::?CLASS.^name) :element($name)
                 if $control-type eq 'file' && $method eq 'get';
             my %control =
                     :$name,
                     label => self!calculate-label($attr),
                     (with $attr.?webapp-form-help { help => $_ }),
                     (with $attr.?webapp-form-placeholder { placeholder => $_ }),
+                    (with $attr.?webapp-form-checkbox-right { checkbox-right => $_ }),
                     required => ?$attr.required,
                     type => $control-type,
                     read-only => $attr.?webapp-form-ro,
@@ -564,6 +589,7 @@ role Cro::WebApp::Form {
                 my $ts = .Str;
                 if $ts.ends-with('Z') {
                     $ts ~~ s/ '.' \d+? 'Z' /Z/;
+                    $ts .= chop;
                 } else {
                     my $cutoff = $ts.rindex(".") // $ts.rindex("-") // $ts.rindex("+");
                     my $i  = $ts.chars - $cutoff;
@@ -663,6 +689,7 @@ role Cro::WebApp::Form {
         with try response -> Cro::HTTP::Response $response {
             my $token = $response.request.cookie-value(CSRF-TOKEN-NAME) //
                     $response.cookies.first(*.name eq CSRF-TOKEN-NAME).?value;
+
             without $token {
                 my constant @CHARS = flat 'A'..'Z', 'a'..'z', '0'..'9';
                 $token = @CHARS.roll(64).join;

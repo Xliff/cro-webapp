@@ -93,8 +93,14 @@
     </?>
     <?{ .type eq 'checkbox' }>
       <div<&class($check-group-class)>>
-        <input type="checkbox" name="<.name>" <?.read-only>disabled</?> id="<.name>"<&control-class($_, $check-control-class, :$is-invalid-class)><?.<value>> checked</?>>
-        <label for="<.name>"<&class($check-label-class)>><.label></label>
+        <?.checkbox-right>
+          <label for="<.name>"<&class($check-label-class)>><.label></label>
+          <input type="checkbox" name="<.name>" id="<.name>"<&control-class($_, $check-control-class, :$is-invalid-class)><?.<value>> checked</?>>
+        </?>
+        <!>
+          <input type="checkbox" name="<.name>" id="<.name>"<&control-class($_, $check-control-class, :$is-invalid-class)><?.<value>> checked</?>>
+          <label for="<.name>"<&class($check-label-class)>><.label></label>
+        </!>
         <&control-help($_, :$help-class)>
         <&control-validation-message($_, :$invalid-feedback-class)>
       </div>
