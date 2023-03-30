@@ -203,7 +203,7 @@ multi trait_mod:<is>(Attribute:D $attr, Bool :$form-checkbox-right! --> Nil) is 
 #| return a list of Pair objects, where the key is the selected value and the value is
 #| the text to display. If non-Pairs are in the list, a Pair with the same key and value
 #| will be formed from them.
-multi trait_mod:<will>(Attribute:D $attr, &block, :$select! --> Nil) is export {
+multi trait_mod:<will>(Attribute:D $attr, &block, :select-from(:$select)! --> Nil) is export {
     ensure-attr-state($attr);
     $attr.webapp-form-select = &block;
 }
@@ -617,7 +617,8 @@ role Cro::WebApp::Form {
             else {
                 $key = $value = $opt;
             }
-            $key eq @current.any ?? ($key, $value, True) !! ($key, $value);
+            $value eq @current.any ?? ($key, $value, True)
+                                   !! ($key, $value);
         }]
     }
 
