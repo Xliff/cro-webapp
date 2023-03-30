@@ -34,7 +34,7 @@ class Cro::WebApp::Template::Compiled is implementation-detail {
     }
     multi method render(%topic --> Str) {
         my $*TEMPLATE-REPOSITORY = $!repository;
-        &!renderer($topic)
+        &!renderer(%topic)
     }
 }
 
