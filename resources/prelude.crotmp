@@ -1,13 +1,13 @@
 <:sub class($maybe-class)><?$maybe-class> class="<$maybe-class>"</?></:>
 <:sub class-name($maybe-class)><?$maybe-class><$maybe-class></?></:>
-<:sub control-class($_, $control-class, :$is-invalid-class)>
+<:sub control-class($_, $control-class, :$is-invalid-class, :$prefix = '')>
   class="<&class-name($control-class)><?.<validation-errors>><&class-name($is-invalid-class)></?>"
-  <?.<help>>aria-describedby="<.name>_help"</?>
+  <?.<help>>aria-describedby="<&fieldName($prefix, .name)>_help"</?>
 </:>
 <:sub rows-cols($rows, $cols)><?$rows> rows="<$rows>"</?><?$cols> cols="<$cols>"</?></:>
-<:sub opt($_, $name)><?.{$name}.defined> <$name>="<.{$name}>" </?></:>
-<:sub num-opts($_)><&opt($_, 'min')><&opt($_, 'max')></:>
-<:sub str-opts($_)><&opt($_, 'minlength')><&opt($_, 'maxlength')><&opt($_, 'placeholder')></:>
+<:sub opt($_, $name, :$prefix = '')><?.{$name}.defined> <&fieldName($prefix, .name)>="<.{$name}>" </?></:>
+<:sub num-opts($_, :$prefix = '')><&opt($_, 'min', :$prefix)><&opt($_, 'max', :$prefix)></:>
+<:sub str-opts($_, :$prefix = '')><&opt($_, 'minlength', :$prefix)><&opt($_, 'maxlength')><&opt($_, 'placeholder', :$prefix)></:>
 <:sub control-validation-message($_, :$invalid-feedback-class)>
   <?.<validation-errors>>
     <@<validation-errors>>
@@ -15,9 +15,9 @@
     </@>
   </?>
 </:>
-<:sub control-help($_, :$help-class)>
+<:sub control-help($_,  :$help-class, :$prefix = '')>
   <?.<help>>
-    <small id="<.name>_help"<&class($help-class)>><.help></small>
+    <small id="<&fieldName($prefix, .name)>_help"<&class($help-class)>><.help></small>
   </?>
 </:>
 
@@ -34,99 +34,121 @@
   </?>
 </:>
 
+<:sub fieldName($p, $n)><?$p><$p>-</?>$n</:>
+
 <:sub form($_, :$input-group-class, :$input-control-class, :$input-label-class,
                :$check-group-class, :$check-control-class, :$check-label-class,
                :$novalidate, :$was-validated-class, :$is-invalid-class,
                :$invalid-feedback-class, :$form-errors-class, :$form-errors-text,
                :$help-class, :$submit-button-class, :$submit-button-text,
-               :$action, :$name, :$supplemental-markup, :$method = 'post')>
-  <form name="<?$name><$name></?><!$name><.GENERATE-NAME></!>" method="<$method>"<?$action> action="<$action>"</?><?$novalidate> novalidate</?><?{ .<was-validated> && $was-validated-class }> class="<$was-validated-class>"</?><?.HTML-RENDER-DATA(:$method).enctype> enctype="<.HTML-RENDER-DATA(:$method).enctype>"</?>>
-  <&form-errors($_, :$form-errors-class, :$form-errors-text, :$method)>
-  <@HTML-RENDER-DATA(:$method).controls>
-    <?{ .type eq 'text' || .type eq 'email' || .type eq 'search' || .type eq 'url' || .type eq 'tel' }>
-      <div<&class($input-group-class)>>
-        <label for="<.name>"<&class($input-label-class)>><.label></label>
-        <input type="<.type>" <?.read-only>disabled</?><!>name="<.name>"</!> id="<.name>"<&control-class($_, $input-control-class, :$is-invalid-class)><&str-opts($_)><?.<value>.defined()> value="<.value>"</?>>
-        <?.read-only><input name="<.name>" type="hidden" value="<.value>"></?>
-        <&control-help($_, :$help-class)>
-        <&control-validation-message($_, :$invalid-feedback-class)>
-      </div>
-    </?>
-    <?{ .type eq 'file' }>
-      <div<&class($input-group-class)>>
-        <label for="<.name>"<&class($input-label-class)>><.label></label>
-        <input type="<.type>" name="<.name>" <?.read-only>disabled</?> id="<.name>"<&control-class($_, $input-control-class, :$is-invalid-class)><&str-opts($_)>>
-        <&control-help($_, :$help-class)>
-        <&control-validation-message($_, :$invalid-feedback-class)>
-      </div>
-    </?>
-    <?{ .type eq 'number' }>
-      <div<&class($input-group-class)>>
-        <label for="<.name>"<&class($input-label-class)>><.label></label>
-        <input type="number" name="<.name>" <?.read-only>disabled</?> id="<.name>"<&control-class($_, $input-control-class, :$is-invalid-class)><&num-opts($_)><?.<value>.defined()> value="<.value>"</?>>
-        <&control-help($_, :$help-class)>
-        <&control-validation-message($_, :$invalid-feedback-class)>
-      </div>
-    </?>
-    <?{ .type eq 'color' || .type eq 'date' || .type eq 'datetime-local' || .type eq 'month' || .type eq 'time' || .type eq 'week' }>
-      <div<&class($input-group-class)>>
-        <label for="<.name>"<&class($input-label-class)>><.label></label>
-        <input type="<.type>" name="<.name>" <?.read-only>disabled</?> id="<.name>"<&control-class($_, $input-control-class, :$is-invalid-class)><?.<value>.defined()> value="<.value>"</?>>
-        <&control-help($_, :$help-class)>
-        <&control-validation-message($_, :$invalid-feedback-class)>
-      </div>
-    </?>
-    <?{ .type eq 'password' }>
-      <div<&class($input-group-class)>>
-        <label for="<.name>"<&class($input-label-class)>><.label></label>
-        <input type="password" name="<.name>" <?.read-only>disabled</?> id="<.name>"<&control-class($_, $input-control-class, :$is-invalid-class)>>
-        <&control-help($_, :$help-class)>
-        <&control-validation-message($_, :$invalid-feedback-class)>
-      </div>
-    </?>
-    <?{ .type eq 'textarea' }>
-      <div<&class($input-group-class)>>
-        <label for="<.name>"<&class($input-label-class)>><.label></label>
-        <textarea name="<.name>" <?.read-only>disabled</?> id="<.name>"<&control-class($_, $input-control-class, :$is-invalid-class)><&rows-cols(.rows, .cols)><&str-opts($_)>><?.<value>.defined()><.value></?></textarea>
-        <&control-help($_, :$help-class)>
-        <&control-validation-message($_, :$invalid-feedback-class)>
-      </div>
-    </?>
-    <?{ .type eq 'checkbox' }>
-      <div<&class($check-group-class)>>
-        <?.checkbox-right>
-          <label for="<.name>"<&class($check-label-class)>><.label></label>
-          <input type="checkbox" name="<.name>" id="<.name>"<&control-class($_, $check-control-class, :$is-invalid-class)><?.<value>> checked</?>>
-        </?>
-        <!>
-          <input type="checkbox" name="<.name>" id="<.name>"<&control-class($_, $check-control-class, :$is-invalid-class)><?.<value>> checked</?>>
-          <label for="<.name>"<&class($check-label-class)>><.label></label>
-        </!>
-        <&control-help($_, :$help-class)>
-        <&control-validation-message($_, :$invalid-feedback-class)>
-      </div>
-    </?>
-    <?{ .type eq 'select' }>
-      <div<&class($input-group-class)>>
-        <label for="<.name>"<&class($input-label-class)>><.label></label>
-        <select <?.multi>multiple</?> name="<.name>" <?.read-only>disabled</?> id="<.name>"<&control-class($_, $input-control-class, :$is-invalid-class)>>
-          <@options : $opt>
-            <option value="<$opt.[0]>"<?{ $opt.[2] }> selected="selected"</?>><$opt.[1]></option>
-          </@>
-        </select>
-        <&control-help($_, :$help-class)>
-        <&control-validation-message($_, :$invalid-feedback-class)>
-      </div>
-    </?>
-    <?{ .type eq 'hidden' }>
-      <input type="hidden" name="<.name>" id="<.name>"<?.<value>.defined()> value="<.value>"</?>>
-    </?>
-  </@>
+               :$action, :$name, :$supplemental-markup, :$prefix,
+               :$method = 'post', :$subform = False)>
+
+   <?$subform>
+   <form name="<?$name><&fieldName(.name)></?><!$name><.GENERATE-NAME></!>" method="<$method>"<?$action> action="<$action>"</?><?$novalidate> novalidate</?><?{ .<was-validated> && $was-validated-class }> class="<$was-validated-class>"</?><?.HTML-RENDER-DATA(:$method).enctype> enctype="<.HTML-RENDER-DATA(:$method).enctype>"</?>>
+   <&form-errors($_, :$form-errors-class, :$form-errors-text, :$method)>
+   </?>
+   <@HTML-RENDER-DATA(:$method).controls>
+     <?{ .type eq 'text' || .type eq 'email' || .type eq 'search' || .type eq 'url' || .type eq 'tel' }>
+       <div<&class($input-group-class)>>
+         <label for="<&fieldName(.name)>"<&class($input-label-class)>><.label></label>
+         <input type="<.type>" <?.read-only>disabled</?><!>name="<&fieldName(.name)>"</!> id="<&fieldName(.name)>"<&control-class($_, $input-control-class, :$is-invalid-class)><&str-opts($_, :$prefix)><?.<value>.defined()> value="<.value>"</?>>
+         <?.read-only><input name="<&fieldName(.name)>" type="hidden" value="<.value>"></?>
+         <&control-help($_,  :$help-class)>
+         <&control-validation-message($_, :$invalid-feedback-class)>
+       </div>
+     </?>
+     <?{ .type eq 'file' }>
+       <div<&class($input-group-class)>>
+         <label for="<&fieldName(.name)>"<&class($input-label-class)>><.label></label>
+         <input type="<.type>" name="<&fieldName(.name)>" <?.read-only>disabled</?> id="<&fieldName(.name)>"<&control-class($_, $input-control-class, :$is-invalid-class)><&str-opts($_, :$prefix)>>
+         <&control-help($_,  :$help-class)>
+         <&control-validation-message($_, :$invalid-feedback-class)>
+       </div>
+     </?>
+     <?{ .type eq 'number' }>
+       <div<&class($input-group-class)>>
+         <label for="<&fieldName(.name)>"<&class($input-label-class)>><.label></label>
+         <input type="number" name="<&fieldName(.name)>" <?.read-only>disabled</?> id="<&fieldName(.name)>"<&control-class($_, $input-control-class, :$is-invalid-class)><&num-opts($_, :$prefix)><?.<value>.defined()> value="<.value>"</?>>
+         <&control-help($_,  :$help-class)>
+         <&control-validation-message($_, :$invalid-feedback-class)>
+       </div>
+     </?>
+     <?{ .type eq 'color' || .type eq 'date' || .type eq 'datetime-local' || .type eq 'month' || .type eq 'time' || .type eq 'week' }>
+       <div<&class($input-group-class)>>
+         <label for="<&fieldName(.name)>"<&class($input-label-class)>><.label></label>
+         <input type="<.type>" name="<&fieldName(.name)>" <?.read-only>disabled</?> id="<&fieldName(.name)>"<&control-class($_, $input-control-class, :$is-invalid-class)><?.<value>.defined()> value="<.value>"</?>>
+         <&control-help($_,  :$help-class)>
+         <&control-validation-message($_, :$invalid-feedback-class)>
+       </div>
+     </?>
+     <?{ .type eq 'password' }>
+       <div<&class($input-group-class)>>
+         <label for="<&fieldName(.name)>"<&class($input-label-class)>><.label></label>
+         <input type="password" name="<&fieldName(.name)>" <?.read-only>disabled</?> id="<&fieldName(.name)>"<&control-class($_, $input-control-class, :$is-invalid-class)>>
+         <&control-help($_,  :$help-class)>
+         <&control-validation-message($_, :$invalid-feedback-class)>
+       </div>
+     </?>
+     <?{ .type eq 'textarea' }>
+       <div<&class($input-group-class)>>
+         <label for="<&fieldName(.name)>"<&class($input-label-class)>><.label></label>
+         <textarea name="<&fieldName(.name)>" <?.read-only>disabled</?> id="<&fieldName(.name)>"<&control-class($_, $input-control-class, :$is-invalid-class)><&rows-cols(.rows, .cols)><&str-opts($_, :$prefix)>><?.<value>.defined()><.value></?></textarea>
+         <&control-help($_,  :$help-class)>
+         <&control-validation-message($_, :$invalid-feedback-class)>
+       </div>
+     </?>
+     <?{ .type eq 'checkbox' }>
+       <div<&class($check-group-class)>>
+         <?.checkbox-right>
+           <label for="<&fieldName(.name)>"<&class($check-label-class)>><.label></label>
+           <input type="checkbox" name="<&fieldName(.name)>" id="<&fieldName(.name)>"<&control-class($_, $check-control-class, :$is-invalid-class)><?.<value>> checked</?>>
+         </?>
+         <!>
+           <input type="checkbox" name="<&fieldName(.name)>" id="<&fieldName(.name)>"<&control-class($_, $check-control-class, :$is-invalid-class)><?.<value>> checked</?>>
+           <label for="<&fieldName(.name)>"<&class($check-label-class)>><.label></label>
+         </!>
+         <&control-help($_,  :$help-class)>
+         <&control-validation-message($_, :$invalid-feedback-class)>
+       </div>
+     </?>
+     <?{ .type eq 'select' }>
+       <div<&class($input-group-class)>>
+         <label for="<&fieldName(.name)>"<&class($input-label-class)>><.label></label>
+         <select <?.multi>multiple</?> name="<&fieldName(.name)>" <?.read-only>disabled</?> id="<&fieldName(.name)>"<&control-class($_, $input-control-class, :$is-invalid-class)>>
+           <@options : $opt>
+             <option value="<$opt.[0]>"<?{ $opt.[2] }> selected="selected"</?>><$opt.[1]></option>
+           </@>
+         </select>
+         <&control-help($_,  :$help-class)>
+         <&control-validation-message($_, :$invalid-feedback-class)>
+       </div>
+     </?>
+     <?{ .type eq 'object' }>
+       <div class="subform-<&fieldName(.name)>">
+         <h3><.name></h3>
+         <&form(.value, :$input-group-class, :$input-control-class, :$input-label-class,
+                        :$check-group-class, :$check-control-class, :$check-label-class,
+                        :$novalidate, :$was-validated-class, :$is-invalid-class,
+                        :$invalid-feedback-class,
+                        :$help-class, :$submit-button-class, :$submit-button-text,
+                        :$action, :$method,
+                        :supplemental-markup(''),
+                        :name(''), :form-errors-text(''), :subform(1), :prefix(''))>
+       </div>
+     </?>
+     <?{ .type eq 'hidden' }>
+       <input type="hidden" name="<&fieldName(.name)>" id="<&fieldName(.name)>"<?.<value>.defined()> value="<.value>"</?>>
+     </?>
+   </@>
+
   <?$supplemental-markup>
     <&HTML($supplemental-markup)>
   </?>
-  <button type="submit"<&class($submit-button-class)>>
-    <?$submit-button-text><$submit-button-text></?><!$submit-button-text>Save</!>
-  </button>
-  </form>
+  <?$subform>
+    <button type="submit"<&class($submit-button-class)>>
+      <?$submit-button-text><$submit-button-text></?><!$submit-button-text>Save</!>
+    </button>
+    </form>
+  </?>
 </:>
