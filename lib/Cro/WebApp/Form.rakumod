@@ -129,6 +129,15 @@ multi trait_mod:<is>(Attribute:D $attr, :$week! --> Nil) is export {
     $attr.webapp-form-type = 'week';
 }
 
+#| Indicates that this is an object "field" and requires a sub-form
+multi trait_mod:<is>(
+  Attribute:D  $attr,
+  Bool        :subform(:web_object(:$web-object))! --> Nil
+) is export {
+    ensure-attr-state($attr);
+    $attr.webapp-form-type = 'object';
+}
+
 #| Indicate that this is a multi-line form field. Optionally, the number of
 #| rows and cols can be provided.
 multi trait_mod:<is>(Attribute:D $attr, :$multiline! --> Nil) is export {
@@ -481,6 +490,7 @@ role Cro::WebApp::Form {
                     required => ?$attr.required,
                     type => $control-type,
                     read-only => $attr.?webapp-form-ro,
+
                     %properties;
             if %validation-by-control{$name} -> @errors {
                 self!set-control-validation(%control, @errors)
@@ -544,6 +554,9 @@ role Cro::WebApp::Form {
             }
             if $attr.type ~~ DateTime {
                 return 'datetime-local', self!add-current-value($attr);
+            }
+            if $attr.type ~~ Cro::WebApp::Form {
+                return 'object', self!add-current-value($attr);
             }
         }
 

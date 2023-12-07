@@ -16,6 +16,10 @@ sub __TEMPLATE_SUB__HTML-AND-JAVASCRIPT(Str() $html) is export {
     $html
 }
 
+sub __TEMPLATE_SUB__GENERATE-FORM-PREFIX(Str() $p, Str() $n) is export {
+  "{ $p ?? "{ $p }-" !! '' }{ $n }";
+}
+
 sub __TEMPLATE_SUB__MERGESPACES(Str() $text) is export {
     $text.subst(/\s+/, ' ', :g);
 }
