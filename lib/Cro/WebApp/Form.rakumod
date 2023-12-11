@@ -487,9 +487,9 @@ role Cro::WebApp::Form {
                     (with $attr.?webapp-form-help { help => $_ }),
                     (with $attr.?webapp-form-placeholder { placeholder => $_ }),
                     (with $attr.?webapp-form-checkbox-right { checkbox-right => $_ }),
+                    (with $attr.?webapp-form-ro { read-only => $_ }),
                     required => ?$attr.required,
                     type => $control-type,
-                    read-only => $attr.?webapp-form-ro,
 
                     %properties;
             if %validation-by-control{$name} -> @errors {
@@ -630,8 +630,8 @@ role Cro::WebApp::Form {
             else {
                 $key = $value = $opt;
             }
-            $value eq @current.any ?? ($key, $value, True)
-                                   !! ($key, $value);
+            ($value // '') eq @current.any ?? ($key, $value, True)
+                                           !! ($key, $value);
         }]
     }
 
