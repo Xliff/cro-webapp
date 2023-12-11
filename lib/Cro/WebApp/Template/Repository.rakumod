@@ -177,10 +177,13 @@ sub set-template-repository(Cro::WebApp::Template::Repository $repository --> Ni
 
 #| Load a template from the given C<IO>.
 sub load-template(
-    IO() $abs-path,
-    Str() :$prepend = '',
-    Str() :$append  = '',
-    :@locations --> Cro::WebApp::Template::Compiled
+    IO()   $abs-path,
+    Str() :$prepend        = '',
+    Str() :$append         = '',
+          :$sequence-start,
+          :$sequence-end,
+          :@locations
+    --> Cro::WebApp::Template::Compiled
 )
     is export
 {
@@ -189,19 +192,43 @@ sub load-template(
         my Cro::WebApp::Template::Location @*TEMPLATE-LOCATIONS = @locations;
         my $source = $prepend ~ $abs-path.slurp ~ $append;
         my $*TEMPLATE-FILE = $abs-path;
-        my $ast = Cro::WebApp::Template::Parser.parse($source, actions => Cro::WebApp::Template::ASTBuilder).ast;
+
+        my ($*S-O, $*S-C, $*S-OC) = (sequence-start, sequence-end);
+        $*S-O = $sequence-start if $sequence-start;
+        $*S-C = $sequence-end   if $sequence-end;
+
+        my $ast = Cro::WebApp::Template::Parser.parse(
+          $source,
+          actions => Cro::WebApp::Template::ASTBuilder
+        ).ast;
         Cro::WebApp::Template::Compiled.new(|$ast.compile, repository => $template-repo, :path($abs-path))
     }
 }
 
 #| Parse a template from a source string. An optional path may be passed for
 #| use in error reporting.
-sub parse-template(Str $source, IO() :$path = 'anon'.IO, :@locations --> Cro::WebApp::Template::Compiled) is export {
+sub parse-template(
+  Str   $source,
+  IO() :$path = 'anon'.IO,
+       :@locations,
+       :$sequence-start = sequence-start(),
+       :$sequence-end   = sequence-end(),
+
+       --> Cro::WebApp::Template::Compiled
+  ) is export {
     Cro::WebApp::LogTimeline::CompileTemplate.log: :template($path.relative), {
         my $*TEMPLATE-REPOSITORY = $template-repo;
         my Cro::WebApp::Template::Location @*TEMPLATE-LOCATIONS = @locations;
         my $*TEMPLATE-FILE = $path;
-        my $ast = Cro::WebApp::Template::Parser.parse($source, actions => Cro::WebApp::Template::ASTBuilder).ast;
+
+        my ($*S-O, $*S-C, $*S-OC) = (sequence-start, sequence-end);
+        $*S-O = $sequence-start if $sequence-start;
+        $*S-C = $sequence-end   if $sequence-end;
+
+        my $ast = Cro::WebApp::Template::Parser.parse(
+          $source,
+          actions => Cro::WebApp::Template::ASTBuilder
+        ).ast;
         Cro::WebApp::Template::Compiled.new(|$ast.compile, repository => $template-repo, :$path)
     }
 }

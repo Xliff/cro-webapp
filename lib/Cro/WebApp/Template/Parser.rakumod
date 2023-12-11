@@ -17,6 +17,23 @@ class X::Cro::WebApp::Template::SyntaxError does X::Cro::WebApp::Template {
     }
 }
 
+my ($S-O, $S-C, $S-OC) = ( "'<'", "'>'", "'</'" );
+sub sequence-start () is rw is export {
+  Proxy.new:
+    FETCH => -> $     { $S-O },
+    STORE => -> $, \v { $S-O = v }
+}
+
+sub sequence-end () is rw is export {
+  Proxy.new:
+    FETCH => -> $     { $S-C },
+    STORE => -> $, \v { $S-C = v }
+}
+
+sub set-single-tag-start ($oc) is export {
+  $*S-OC = $oc;
+}
+
 grammar Cro::WebApp::Template::Parser {
     token TOP {
         :my $*IN-ATTRIBUTE = False;
@@ -38,15 +55,15 @@ grammar Cro::WebApp::Template::Parser {
 
     token sequence-element:sym<literal-open-tag> {
         :my $*IN-ATTRIBUTE = True;
-        '<' <![/]> <!sigil>
+        <{ $*S-O }> <![/]> <!sigil>
         <tag-element>+
-        [ '>' || <.panic: "malformed tag"> ]
+        [ <{ $*S-C }> || <.panic: "malformed tag"> ]
     }
 
     token sequence-element:sym<literal-close-tag> {
-        '</' <!sigil>
+        <{ $*S-OC }> <!sigil>
         <-[>]>+
-        [ '>' || <.panic: "malformed closing tag"> ]
+        [ <{ $*S-C }> || <.panic: "malformed closing tag"> ]
     }
 
 
@@ -58,40 +75,40 @@ grammar Cro::WebApp::Template::Parser {
     }
 
     token sigil-tag:sym<comment> {
-      '<#>' .+? '</#>'
+      <{ $*S-O }> '#' <{ $*S-C }> .+? <{ $*S-O }> '/#' <{ $*S-C }>
     }
 
     token tag-element:sym<literal> {
-        | '!--' .*? '--' <?before '>'>
+        | '!--' .*? '--' <?before <{ $*S-C }>>
         | <-[<>]>+
     }
 
     proto token sigil-tag { * }
 
-    token sigil-tag:sym<geLiteral> { '<\ge>' }
-    token sigil-tag:sym<leLiteral> { '<\le>' }
-    token sigil-tag:sym<gtLiteral> { '<\gt>' }
-    token sigil-tag:sym<ltLiteral> { '<\lt>' }
+    token sigil-tag:sym<geLiteral> { <$*S-O> '\ge' <{ $*S-C }> }
+    token sigil-tag:sym<leLiteral> { <$*S-O> '\le' <{ $*S-C }> }
+    token sigil-tag:sym<gtLiteral> { <$*S-O> '\gt' <{ $*S-C }> }
+    token sigil-tag:sym<ltLiteral> { <$*S-O> '\lt' <{ $*S-C }> }
 
     token sigil-tag:sym<topic> {
-        '<.'
+        <{ $*S-O }> '.'
         [ <deref> || <.malformed: 'topic tag'> ]
-        [ '>' || <.malformed: 'topic tag'> ]
+        [ <{ $*S-C }> || <.malformed: 'topic tag'> ]
     }
 
     token sigil-tag:sym<variable> {
-        '<$'
+        <{ $*S-O }> '$'
         [ <identifier> || <.malformed: 'variable tag'> ]
         [ '.' <deref> ]?
-        [ '>' || <.malformed: 'variable tag'> ]
+        [ <{ $*S-C }> || <.malformed: 'variable tag'> ]
     }
 
     token sigil-tag:sym<iteration> {
         :my $*SEPARATOR;
         :my $opener = $¢.clone;
         :my $*lone-start-line = False;
-        '<@'
-        [ <?after [^ | $ | \n] \h* '<@'> { $*lone-start-line = True } ]?
+        <{ $*S-O }> '@'
+        [ <?after [^ | $ | \n] \h* <{ $*S-O }> '@'> { $*lone-start-line = True } ]?
         [
         | '.'? <deref>
         | $<variable>=['$' <.identifier>] ['.' <deref>]?
@@ -99,16 +116,16 @@ grammar Cro::WebApp::Template::Parser {
         ]
         [\h* ':' \h* <iteration-variable=.parameter(:!allow-named, :!allow-default)>]?
         [ \h+ <structural-tag> ]?
-        [ \h* '>' || <.malformed: 'iteration tag'> ]
+        [ \h* <{ $*S-C }> || <.malformed: 'iteration tag'> ]
         [ <?{ $*lone-start-line }> [ \h* \n | { $*lone-start-line = False } ] ]?
 
         <sequence-element('iteration')>*
 
         :my $*lone-end-line = False;
-        [ '</@' || { $opener.unclosed('iteration tag') } ]
-        [ <?after \n \h* '</@'> { $*lone-end-line = True } ]?
+        [ <{ $*S-O }> '/@' || { $opener.unclosed('iteration tag') } ]
+        [ <?after \n \h* <{ $*S-O }> '/@'> { $*lone-end-line = True } ]?
         <close-ident=.ident>?
-        [ \h* '>' || <.malformed: 'iteration closing tag'> ]
+        [ \h* <{ $*S-C }> || <.malformed: 'iteration closing tag'> ]
         [ <?{ $*lone-end-line }> [ \h* \n | { $*lone-end-line = False } ] ]?
     }
 
@@ -119,7 +136,7 @@ grammar Cro::WebApp::Template::Parser {
         [ <?after [^ | $ | \n] \h* '<:separator'> { $*lone-start-line = True } ]?
         \h*
         [
-        || '>'
+        || <{ $*S-C }>
         || <.malformed: 'separator tag'>
         ]
         [ <?{ $*lone-start-line }> [ \h* \n | { $*lone-start-line = False } ] ]?
@@ -136,37 +153,37 @@ grammar Cro::WebApp::Template::Parser {
         <sequence-element>*
 
         :my $*lone-end-line = False;
-        [ '</:' || { $opener.unclosed('separator tag') } ]
-        [ <?after \n \h* '</:'> { $*lone-end-line = True } ]?
-        [ 'separator'? \h* '>' || <.malformed: 'separator closing tag'> ]
+        [ <{ $*S-O }> '/:' || { $opener.unclosed('separator tag') } ]
+        [ <?after \n \h* <{ $*S-O }> '/:'> { $*lone-end-line = True } ]?
+        [ 'separator'? \h* <{ $*S-C }> || <.malformed: 'separator closing tag'> ]
         [ <?{ $*lone-end-line }> [ \h* \n | { $*lone-end-line = False } ] ]?
     }
 
     token sigil-tag:sym<condition> {
-        <!before '<!-'>
+        <!before <{ $*S-O }>'!-' >
         :my $opener = $¢.clone;
         :my $*lone-start-line = False;
-        '<' $<negate>=<[?!]>
-        [ <?after [^ | $ | \n] \h* '<' <[?!]>> { $*lone-start-line = True } ]?
+        <{ $*S-O }> $<negate>=<[?!]>
+        [ <?after [^ | $ | \n] \h* <{ $*S-O }> <[?!]>> { $*lone-start-line = True } ]?
         <condition>
         [ \h+ <structural-tag> ]?
-        [ \h* '>' || <.malformed: 'condition tag'> ]
+        [ \h* <{ $*S-C }> || <.malformed: 'condition tag'> ]
         [ <?{ $*lone-start-line }> [ \h* \n | { $*lone-start-line = False } ] ]?
 
         <sequence-element>*
 
         :my $*lone-end-line = False;
-        [ '</' $<negate> || { $opener.unclosed('condition tag') } ]
-        [ <?after \n \h* '</' <[?!]>> { $*lone-end-line = True } ]?
+        [ <{ $*S-O }> '/' $<negate> || { $opener.unclosed('condition tag') } ]
+        [ <?after \n \h* <{ $*S-O }> '/' <[?!]>> { $*lone-end-line = True } ]?
         <close-ident=.ident>?
-        [ \h* '>' || <.malformed: 'condition closing tag'> ]
+        [ \h* <{ $*S-C }> || <.malformed: 'condition closing tag'> ]
         [ <?{ $*lone-end-line }> [ \h* \n | { $*lone-end-line = False } ] ]?
 
         [
-        || <?before \s* '<!?'>
+        || <?before \s* <{ $*S-O }> '!?'>
            [ { $<negate> eq '?' } || <.panic('cannot have elsif parts on a negated conditional tag')> ]
            \s* <else=.elsif>
-        || <?before \s* '<!' [\s | \h* '>']>
+        || <?before \s* <{ $*S-O }> '!' [\s | \h* <{ $*S-C }>]>
            [ { $<negate> eq '?' } || <.panic('cannot have else parts on a negated conditional tag')> ]
            \s* <else>
         ]?
@@ -175,24 +192,24 @@ grammar Cro::WebApp::Template::Parser {
     token elsif {
         :my $opener = $¢.clone;
         :my $*lone-start-line = False;
-        '<!?'
-        [ <?after [^ | $ | \n] \h* '<!?'> { $*lone-start-line = True } ]?
+        <{ $*S-O }> '!?'
+        [ <?after [^ | $ | \n] \h* <{ $*S-O }> '!?'> { $*lone-start-line = True } ]?
         <condition>
         [ \h+ <structural-tag> ]?
-        [ \h* '>' || <.malformed: 'condition tag'> ]
+        [ \h* <{ $*S-C }> || <.malformed: 'condition tag'> ]
         [ <?{ $*lone-start-line }> [ \h* \n | { $*lone-start-line = False } ] ]?
 
         <sequence-element>*
 
         :my $*lone-end-line = False;
-        [ '</?>' || { $opener.unclosed('condition tag') } ]
-        [ <?after \n \h* '</?>'> { $*lone-end-line = True } ]?
+        [ <{ $*S-O }> '/?' <{ $*S-C }> || { $opener.unclosed('condition tag') } ]
+        [ <?after \n \h* <{ $*S-O }> '/?' <{ $*S-C }>> { $*lone-end-line = True } ]?
         [ <?{ $*lone-end-line }> [ \h* \n | { $*lone-end-line = False } ] ]?
 
         [
-        || <?before \s* '<!?'>
+        || <?before \s* <{ $*S-O }> '!?'>
            \s* <else=.elsif>
-        || <?before \s* '<!' [\s | \h* '>']>
+        || <?before \s* <{ $*S-O }> '!' [\s | \h* <{ $*S-C }>]>
            \s* <else>
         ]?
     }
@@ -200,17 +217,17 @@ grammar Cro::WebApp::Template::Parser {
     token else {
         :my $opener = $¢.clone;
         :my $*lone-start-line = False;
-        '<!'
-        [ <?after [^ | $ | \n] \h* '<!'> { $*lone-start-line = True } ]?
+        <{ $*S-O }>'!'
+        [ <?after [^ | $ | \n] \h* <{ $*S-O }>'!'> { $*lone-start-line = True } ]?
         [ \h+ <structural-tag> ]?
-        [ \h* '>' || <.malformed: 'condition tag'> ]
+        [ \h* <{ $*S-C }> || <.malformed: 'condition tag'> ]
         [ <?{ $*lone-start-line }> [ \h* \n | { $*lone-start-line = False } ] ]?
 
         <sequence-element>*
 
         :my $*lone-end-line = False;
-        [ '</!>' || { $opener.unclosed('condition tag') } ]
-        [ <?after \n \h* '</!>'> { $*lone-end-line = True } ]?
+        [ <{ $*S-O }> '/!' <{ $*S-C }> || { $opener.unclosed('condition tag') } ]
+        [ <?after \n \h* <{ $*S-O }> '/!' <{ $*S-C }>> { $*lone-end-line = True } ]?
         [ <?{ $*lone-end-line }> [ \h* \n | { $*lone-end-line = False } ] ]?
     }
 
@@ -228,22 +245,22 @@ grammar Cro::WebApp::Template::Parser {
     }
 
     token sigil-tag:sym<call> {
-        '<&'
+        <{ $*S-O }> '&'
         [
         || <target=.identifier> \h* <arglist>? \h*
         || <.malformed: 'call tag'>
         ]
-        [ '>' || <.malformed: 'call tag'> ]
+        [ <{ $*S-C }> || <.malformed: 'call tag'> ]
     }
 
     token sigil-tag:sym<sub> {
         :my $opener = $¢.clone;
         :my $*lone-start-line = False;
-        '<:sub'
-        [ <?after [^ | $ | \n] \h* '<:sub'> { $*lone-start-line = True } ]?
+        <{ $*S-O }> ':sub'
+        [ <?after [^ | $ | \n] \h* <{ $*S-O }> ':sub'> { $*lone-start-line = True } ]?
         \h+
         [
-        || <name=.identifier> \h* <signature>? '>'
+        || <name=.identifier> \h* <signature>? <{ $*S-C }>
         || <.malformed: 'sub declaration tag'>
         ]
         [ <?{ $*lone-start-line }> [ \h* \n | { $*lone-start-line = False } ] ]?
@@ -251,20 +268,20 @@ grammar Cro::WebApp::Template::Parser {
         <sequence-element>*
 
         :my $*lone-end-line = False;
-        [ '</:' || { $opener.unclosed('sub declaration tag') } ]
-        [ <?after \n \h* '</:'> { $*lone-end-line = True } ]?
-        [ 'sub'? \h* '>' || <.malformed: 'sub declaration closing tag'> ]
+        [ <{ $*S-O }> '/:' || { $opener.unclosed('sub declaration tag') } ]
+        [ <?after \n \h* <{ $*S-O }>'/:'> { $*lone-end-line = True } ]?
+        [ 'sub'? \h* <{ $*S-C }> || <.malformed: 'sub declaration closing tag'> ]
         [ <?{ $*lone-end-line }> [ \h* \n | { $*lone-end-line = False } ] ]?
     }
 
     token sigil-tag:sym<macro> {
         :my $opener = $¢.clone;
         :my $*lone-start-line = False;
-        '<:macro'
-        [ <?after [^ | $ | \n] \h* '<:macro'> { $*lone-start-line = True } ]?
+        <{ $*S-O }> ':macro'
+        [ <?after [^ | $ | \n] \h* <{ $*S-O }> ':macro'> { $*lone-start-line = True } ]?
         \h+
         [
-        || <name=.identifier> \h* <signature>? '>'
+        || <name=.identifier> \h* <signature>? <{ $*S-C }>
         || <.maformed: 'macro declaration tag'>
         ]
         [ <?{ $*lone-start-line }> [ \h* \n | { $*lone-start-line = False } ] ]?
@@ -273,25 +290,25 @@ grammar Cro::WebApp::Template::Parser {
         <sequence-element>*
 
         :my $*lone-end-line = False;
-        [ '</:' || { $opener.unclosed('macro declaration tag') } ]
-        [ <?after \n \h* '</:'> { $*lone-end-line = True } ]?
-        [ 'macro'? \h* '>' || <.malformed: 'macro declaration closing tag'> ]
+        [ <{ $*S-O }> '/:' || { $opener.unclosed('macro declaration tag') } ]
+        [ <?after \n \h* <{ $*S-O }> '/:'> { $*lone-end-line = True } ]?
+        [ 'macro'? \h* <{ $*S-C }> || <.malformed: 'macro declaration closing tag'> ]
         [ <?{ $*lone-end-line }> [ \h* \n | { $*lone-end-line = False } ] ]?
     }
 
     token sigil-tag:sym<body> {
         [{ $*IN-MACRO } || <.panic('Use of <:body> outside of a macro')>]
-        '<:body' \h* '>'
+        <{ $*S-O }> ':body' \h* <{ $*S-C }>
     }
 
     token sigil-tag:sym<part> {
         :my $opener = $¢.clone;
         :my $*lone-start-line = False;
-        '<:part'
-        [ <?after [^ | $ | \n] \h* '<:part'> { $*lone-start-line = True } ]?
+        <{ $*S-O }> ':part'
+        [ <?after [^ | $ | \n] \h* <{ $*S-O }> ':part'> { $*lone-start-line = True } ]?
         \h+
         [
-        || <name=.identifier> \h* <signature>? '>'
+        || <name=.identifier> \h* <signature>? <{ $*S-C }>
         || <.malformed: 'part declaration tag'>
         ]
         [ <?{ $*lone-start-line }> [ \h* \n | { $*lone-start-line = False } ] ]?
@@ -299,18 +316,18 @@ grammar Cro::WebApp::Template::Parser {
         <sequence-element>*
 
         :my $*lone-end-line = False;
-        [ '</:' || { $opener.unclosed('part declaration tag') } ]
-        [ <?after \n \h* '</:'> { $*lone-end-line = True } ]?
-        [ 'part'? \h* '>' || <.malformed: 'part declaration closing tag'> ]
+        [ <{ $*S-O }> '/:' || { $opener.unclosed('part declaration tag') } ]
+        [ <?after \n \h* <{ $*S-O }> '/:'> { $*lone-end-line = True } ]?
+        [ 'part'? \h* <{ $*S-C }> || <.malformed: 'part declaration closing tag'> ]
         [ <?{ $*lone-end-line }> [ \h* \n | { $*lone-end-line = False } ] ]?
     }
 
     token sigil-tag:sym<apply> {
         :my $*lone-start-line = False;
-        '<|'
-        [ <?after [^ | $ | \n] \h* '<|'> { $*lone-start-line = True } ]?
+        <{ $*S-O }> '|'
+        [ <?after [^ | $ | \n] \h* <{ $*S-O }> '|'> { $*lone-start-line = True } ]?
         [
-        || <target=.identifier> \h* <arglist>? \h* '>'
+        || <target=.identifier> \h* <arglist>? \h* <{ $*S-C }>
         || <.malformed: 'macro application tag'>
         ]
         [ <?{ $*lone-start-line }> [ \h* \n | { $*lone-start-line = False } ] ]?
@@ -318,21 +335,21 @@ grammar Cro::WebApp::Template::Parser {
         <sequence-element>*
 
         :my $*lone-end-line = False;
-        '</|'
-        [ <?after \n \h* '</|'> { $*lone-end-line = True } ]?
+        <{ $*S-O }> '/|'
+        [ <?after \n \h* <{ $*S-O }> '/|'> { $*lone-end-line = True } ]?
         <close-ident=.ident>?
-        [ \h* '>' || <.malformed: 'macro application closing tag'> ]
+        [ \h* <{ $*S-C }> || <.malformed: 'macro application closing tag'> ]
         [ <?{ $*lone-end-line }> [ \h* \n | { $*lone-end-line = False } ] ]?
     }
 
     token sigil-tag:sym<use> {
-        '<:use' \h+
+        <{ $*S-O }> ':use' \h+
         [
         | <file=.single-quote-string>
         | <library=.module-name>
         || <.malformed: 'use tag'>
         ]
-        \h* '>'
+        \h* <{ $*S-C }>
     }
 
     token module-name {
