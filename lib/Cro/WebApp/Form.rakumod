@@ -17,6 +17,8 @@ my role FormProperties {
     has Bool $.webapp-form-not-shown is rw;
     has List @.webapp-form-validations;
     has Bool $.webapp-form-checkbox-right is rw;
+    has      &.webapp-form-custom is rw;
+    has Int  $.webapp-form-position is rw;
 }
 
 #| Ensure that the attribute has the FormProperties mixin.
@@ -245,6 +247,36 @@ multi trait_mod:<is>(Attribute:D $attr, :$validated! --> Nil) is export {
     $attr.webapp-form-validations.push($validated);
 }
 
+multi trait_mod:<is>(Attribute:D $attr, Int :$form-position! --> Nil) is export {
+    ensure-attr-state($attr);
+    $attr.webapp-form-position = $form-position;
+}
+
+multi trait_mod:<is>(
+  Attribute:D  $attr         is copy,
+              :$form-custom! is copy --> Nil
+)
+  is export
+{
+  ensure-attr-state($attr);
+
+  # cw: This doesn't work because the method may not yet exist;
+  if $form-custom ~~ Str {
+    my $m = $attr.package.^can($form-custom);
+
+    die "Cannot use non-existing method { $form-custom } as a custom field handler!"
+      unless $m;
+
+    $form-custom = $m.head;
+  }
+
+  if $form-custom ~~ Callable {
+    $attr.webapp-form-custom = $form-custom;
+  } else {
+    die "Cannot use a { $form-custom.^name } as a custom field handler!";
+  }
+}
+
 #| The set of validation issues relating to a form.
 class Cro::WebApp::Form::ValidationState {
     enum Problem <
@@ -348,9 +380,26 @@ role Cro::WebApp::Form {
     }
 
     #| Get the attributes involved in the form, sorted most deeply
-    #| inherited first.
+    #| inherited first, then modifed by optional sort-order trait.
     method !form-attributes() {
-        self.^mro.reverse.map(*.^attributes(:local)).flat.grep(*.has_accessor)
+        my @a1 = self.^mro.reverse.map(
+          *.^attributes(:local)
+        ).flat.grep( *.has_accessor );
+
+        my @a2 = @a1.clone;
+
+        for @a2 {
+          if .?webapp-form-position -> $o {
+            next if $o > @a1.elems;
+
+            my $w = .WHERE;
+            my $f = @a1.first({ .WHERE == $w }, :k);
+
+            @a1.splice($f, 1);
+            @a1.splice($o.pred, 1, $_);
+          }
+        }
+        @a1;
     }
 
     #| Return the form data as a hash
@@ -470,16 +519,13 @@ role Cro::WebApp::Form {
             }
         }
 
-        my @attributes = self.^mro
-                             .reverse
-                             .map({ |.^attributes(:local) })
-                             .grep( *.has_accessor );
-        for @attributes -> Attribute $attr {
+        for self!form-attributes -> $attr {
             next if $attr.?webapp-form-not-shown;
 
             my ($control-type, %properties) = self!calculate-control-type($attr);
+
             my $name = $attr.name.substr(2);
-            die X::Cro::WebApp::Fosrm::FileInGET.new :form(::?CLASS.^name) :element($name)
+            die X::Cro::WebApp::Form::FileInGET.new :form(::?CLASS.^name) :element($name)
                 if $control-type eq 'file' && $method eq 'get';
             my %control =
                     :$name,
@@ -488,10 +534,11 @@ role Cro::WebApp::Form {
                     (with $attr.?webapp-form-placeholder { placeholder => $_ }),
                     (with $attr.?webapp-form-checkbox-right { checkbox-right => $_ }),
                     (with $attr.?webapp-form-ro { read-only => $_ }),
-                    required => ?$attr.required,
-                    type => $control-type,
+                    required    => ?$attr.required,
+                    type        => $control-type,
 
-                    %properties;
+                    |%properties;
+
             if %validation-by-control{$name} -> @errors {
                 self!set-control-validation(%control, @errors)
             }
@@ -509,6 +556,22 @@ role Cro::WebApp::Form {
 
     method !calculate-control-type(Attribute $attr) {
         # See if we've been explicitly told what it is.
+        my %properties;
+        with $attr.?webapp-form-custom {
+          %properties<value> = do {
+            when Method   {
+                $attr.webapp-form-custom.(
+                  self,
+                  $attr.get_value(self)
+                )
+            }
+
+            when Callable {
+                $attr.webapp-form-custom.( $attr.get_value(self) )
+            }
+          }
+          return 'custom', %properties;
+        }
         with $attr.?webapp-form-type {
             # Some of these are are special, some not just text-like.
             when 'number' {
