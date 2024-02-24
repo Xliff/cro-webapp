@@ -17,6 +17,7 @@ my class Template does ContainerNode is export {
 
     method compile() {
         my $*IN-SUB = False;
+        my $pre-amble = False;
         my $children-compiled = @!children.map(*.compile).join(", ");
         use MONKEY-SEE-NO-EVAL;
         multi sub trait_mod:<is>(Routine $r, :$TEMPLATE-EXPORT-SUB!) {
@@ -26,7 +27,21 @@ my class Template does ContainerNode is export {
             %*TEMPLATE-EXPORTS<macro>{$r.name.substr('__TEMPLATE_MACRO__'.chars)} = $r;
         }
         my %*TEMPLATE-EXPORTS = :sub{}, :macro{};
-        my $renderer = EVAL 'sub ($_) { join "", (' ~ $children-compiled ~ ') }';
+
+        class TemplateMu {
+          method Str    { ''    }
+          method so     { False }
+          method elems  { 0     }
+          method Hash   { %()   }
+          method Array  { []    }
+          method values { []    }
+          method keys   { []    }
+          method pairs  { []    }
+        }
+
+        my $renderer = EVAL
+          'sub ($_) { join "", (' ~ $children-compiled ~ ') }';
+
         return Map.new((:$renderer, exports => %*TEMPLATE-EXPORTS, :@!used-files));
     }
 }
@@ -90,7 +105,9 @@ my class SmartDeref does Node is export {
     method compile() {
         '(given (' ~ $!target.compile ~
             ') { .does(Associative) ?? ((.<' ~ $!symbol ~ '>:exists) ?? .<' ~
-            $!symbol ~ '> !! .?' ~ $!symbol ~ ') !! (.' ~ $!symbol ~ " // '') })"
+            $!symbol ~ '> !! .?' ~ $!symbol ~ ') !! (.' ~ $!symbol ~
+            " // TemplateMu) })"
+            #" // '') })"
     }
 }
 
