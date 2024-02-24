@@ -1,6 +1,8 @@
 use Cro::HTTP::Body;
 use Cro::HTTP::MultiValue;
 
+use Cro::WebApp::Template::Repository;
+
 #| A role to be mixed in to Attribute to hold extra form-related properties.
 my role FormProperties {
     has $.webapp-form-label is rw;
@@ -30,7 +32,7 @@ sub ensure-attr-state(Attribute $attr --> Nil) {
 
 #| Customize the label for the form field (without this, the attribute name will be used
 #| to generate a label).
-multi trait_mod:<is>(Attribute:D $attr, :$label! --> Nil) is export {
+multi trait_mod:<is>(Attribute:D $attr, :form-label(:$label)! --> Nil) is export {
     ensure-attr-state($attr);
     $attr.webapp-form-label = $label;
 }
@@ -262,12 +264,14 @@ multi trait_mod:<is>(
 
   # cw: This doesn't work because the method may not yet exist;
   if $form-custom ~~ Str {
-    my $m = $attr.package.^can($form-custom);
+    unless $form-custom.starts-with('template:') {
+      my $m = $attr.package.^can($form-custom);
 
-    die "Cannot use non-existing method { $form-custom } as a custom field handler!"
-      unless $m;
+      die "Cannot use non-existing method { $form-custom } as a custom field handler!"
+        unless $m;
 
-    $form-custom = $m.head;
+      $form-custom = $m.head;
+    }
   }
 
   if $form-custom ~~ Callable {
@@ -558,6 +562,16 @@ role Cro::WebApp::Form {
         # See if we've been explicitly told what it is.
         my %properties;
         with $attr.?webapp-form-custom {
+          when Str {
+            my $template = .subst('template:', '');
+
+            load-template(
+              self.template-dir.add($template)
+            ).render(
+              val => $attr.get_value(self)
+            )
+          }
+
           %properties<value> = do {
             when Method   {
                 $attr.webapp-form-custom.(
