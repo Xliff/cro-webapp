@@ -29,14 +29,15 @@ my class Template does ContainerNode is export {
         my %*TEMPLATE-EXPORTS = :sub{}, :macro{};
 
         class TemplateMu {
-          method Str    { ''    }
-          method so     { False }
-          method elems  { 0     }
-          method Hash   { %()   }
-          method Array  { []    }
-          method values { []    }
-          method keys   { []    }
-          method pairs  { []    }
+          method FALLBACK ($, *@) { Nil   }
+          method Str              { ''    }
+          method so               { False }
+          method elems            { 0     }
+          method Hash             { %()   }
+          method Array            { []    }
+          method values           { []    }
+          method keys             { []    }
+          method pairs            { []    }
         }
 
         my $renderer = EVAL
