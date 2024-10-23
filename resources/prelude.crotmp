@@ -102,10 +102,10 @@
        <div<&class($check-group-class)>>
          <?.checkbox-right>
            <label for="<&fieldName($prefix, .name)>"<&class($check-label-class)>><.label></label>
-           <input type="checkbox" name="<&fieldName($prefix, .name)>" id="<&fieldName($prefix, .name)>"<&control-class($_, $check-control-class, :$is-invalid-class)><?.<value>> checked</?>>
+           <input type="checkbox" name="<&fieldName($prefix, .name)>" id="<&fieldName($prefix, .name)>"<&control-class($_, $check-control-class, :$is-invalid-class)><?.<value>> checked</?><?.read-only> onclick="return false;"</?>>
          </?>
          <!>
-           <input type="checkbox" name="<&fieldName($prefix, .name)>" id="<&fieldName($prefix, .name)>"<&control-class($_, $check-control-class, :$is-invalid-class)><?.<value>> checked</?>>
+           <input type="checkbox" name="<&fieldName($prefix, .name)>" id="<&fieldName($prefix, .name)>"<&control-class($_, $check-control-class, :$is-invalid-class)><?.<value>> checked</?><?.read-only> onclick="return false;"</?>>
            <label for="<&fieldName($prefix, .name)>"<&class($check-label-class)>><.label></label>
          </!>
          <&control-help($_,  :$help-class)>

@@ -5,22 +5,27 @@ use Cro::WebApp::Template::Repository;
 
 #| A role to be mixed in to Attribute to hold extra form-related properties.
 my role FormProperties {
-    has $.webapp-form-label is rw;
-    has $.webapp-form-placeholder is rw;
-    has $.webapp-form-help is rw;
-    has Str $.webapp-form-type is rw;
-    has Hash $.webapp-form-multiline is rw;
-    has Block $.webapp-form-select is rw;
-    has Int $.webapp-form-minlength is rw;
-    has Int $.webapp-form-maxlength is rw;
-    has Real $.webapp-form-min is rw;
-    has Real $.webapp-form-max is rw;
-    has Bool $.webapp-form-ro is rw;
-    has Bool $.webapp-form-not-shown is rw;
-    has List @.webapp-form-validations;
-    has Bool $.webapp-form-checkbox-right is rw;
-    has      &.webapp-form-custom is rw;
-    has Int  $.webapp-form-position is rw;
+    has       $.webapp-form-label           is rw;
+    has Bool  $.webapp-form-label-not-split is rw;
+    has       $.webapp-form-placeholder     is rw;
+    has       $.webapp-form-help            is rw;
+    has Str   $.webapp-form-type            is rw;
+    has Hash  $.webapp-form-multiline       is rw;
+    has Block $.webapp-form-select          is rw;
+    has Int   $.webapp-form-maxlength       is rw;
+    has Int   $.webapp-form-minlength       is rw;
+    has Real  $.webapp-form-min             is rw;
+    has Real  $.webapp-form-max             is rw;
+    has Bool  $.webapp-form-ro              is rw;
+    has Bool  $.webapp-form-not-shown       is rw;
+    has List  @.webapp-form-validations;
+    has Bool  $.webapp-form-checkbox-right  is rw;
+    has       &.webapp-form-custom          is rw;
+    has Int   $.webapp-form-position        is rw;
+}
+
+sub add-form-properties-to-attribute ($a) is export {
+  $a does FormProperties unless $a ~~ FormProperties;
 }
 
 #| Ensure that the attribute has the FormProperties mixin.
@@ -32,9 +37,18 @@ sub ensure-attr-state(Attribute $attr --> Nil) {
 
 #| Customize the label for the form field (without this, the attribute name will be used
 #| to generate a label).
-multi trait_mod:<is>(Attribute:D $attr, :form-label(:$label)! --> Nil) is export {
+multi trait_mod:<is>(Attribute:D $attr, :labelled(:form-label(:$label))! --> Nil)
+  is export
+{
     ensure-attr-state($attr);
     $attr.webapp-form-label = $label;
+}
+
+multi trait_mod:<is>(Attribute:D $attr, :$label-not-split! --> Nil)
+  is export
+{
+  ensure-attr-state($attr);
+  $attr.webapp-form-not-split = $label-not-split.so;
 }
 
 #| Provide placeholder text for a form field.
@@ -146,10 +160,14 @@ multi trait_mod:<is>(
 #| rows and cols can be provided.
 multi trait_mod:<is>(Attribute:D $attr, :$multiline! --> Nil) is export {
     ensure-attr-state($attr);
-    my %multiline = $multiline ~~ List && all($multiline) ~~ Pair ?? $multiline.hash !! ();
+
+    my $ml = $multiline;
+    $ml .= List if $ml ~~ Pair;
+    my %multiline = $ml ~~ List && all($ml) ~~ Pair ?? $ml.hash !! ();
     with %multiline.keys.first(* !~~ 'rows' | 'cols') {
         die "Unknown option '$_' for multiline trait on attribute '$attr.name()'";
     }
+
     $attr.webapp-form-multiline = %multiline;
 }
 
@@ -171,25 +189,15 @@ multi trait_mod:<is>(Attribute:D $attr, Real :$min! --> Nil) is export {
     $attr.webapp-form-min = $min;
 }
 
-multi trait_mod:<is>(Attribute:D $attr, Bool :$form-read-only! --> Nil) is export {
+#| Set the maximum numeric value of an input field
+multi trait_mod:<is>(Attribute:D $attr, Real :$max! --> Nil) is export {
     ensure-attr-state($attr);
-    $attr.webapp-form-ro = $form-read-only;
-}
-
-multi trait_mod:<is>(Attribute:D $attr, Bool :$form-not-shown! --> Nil) is export {
-    ensure-attr-state($attr);
-    $attr.webapp-form-not-shown = $form-not-shown;
+    $attr.webapp-form-max = $max;
 }
 
 multi trait_mod:<is>(Attribute:D $attr, Bool :$invisible! --> Nil) is export {
     ensure-attr-state($attr);
     $attr.webapp-form-ro = $invisible;
-}
-
-#| Set the maximum numeric value of an input field
-multi trait_mod:<is>(Attribute:D $attr, Real :$max! --> Nil) is export {
-    ensure-attr-state($attr);
-    $attr.webapp-form-max = $max;
 }
 
 multi trait_mod:<is>(Attribute:D $attr, Bool :$form-read-only! --> Nil) is export {
@@ -511,7 +519,7 @@ role Cro::WebApp::Form {
 
     #| Produce a description of the form and its content for use in rendering
     #| the form to HTML.
-    method HTML-RENDER-DATA(:$method where "get"|"post" = "post" --> Hash) {
+    method HTML-RENDER-DATA(:$method where "get"|"post" = "post") {
         return $!cached-render-data
             if $!cached-render-data.defined && $!cached-render-method eq $method;
 
@@ -550,12 +558,32 @@ role Cro::WebApp::Form {
         }
         self!add-csrf-protection(@controls) if $method eq 'post';
         my %enctype = any(self!form-attributes().map(*.?webapp-form-type).grep(*.defined)) eq 'file' ?? enctype => "multipart/form-data" !! Empty;
-        my %rendered := { :@controls, was-validated => $!validation-state.defined, |%enctype };
-        if %validation-by-control{''} -> @errors {
-            %rendered<validation-errors> = [@errors.map(*.message)];
-        }
+        my $vs      = $!validation-state;
+        # cw: This now grants us the ability to pass parameters to .controls
+        #     from the template. This can be use to filter out unneccessary
+        #     controls for a specific use-case, for example.
+        state %cached-class;
+        %cached-class{ self.^name } //= (
+          class :: {
+            has $.was-validated    = $vs.defined;
+            has %.enctype          = |%enctype;
+            has %!cached-rendered;
+
+            method controls ( :$type = '', :$name = '' ) {
+                my $controls = @controls.clone;
+                $controls .= grep({ $type eq $type.split(',').any }) if $type;
+                $controls .= grep({ $name eq $name.split(',').any }) if $name;
+                %!cached-rendered{"{ $type }|{ $name }"} := $controls
+            }
+
+            method validation-errors {
+              %validation-by-control{''}.map( *.message)
+            }
+          }
+        ).new;
+
         $!cached-render-method = $method;
-        return $!cached-render-data := %rendered;
+        %cached-class{ self.^name }
     }
 
     method !calculate-control-type(Attribute $attr) {
@@ -707,8 +735,9 @@ role Cro::WebApp::Form {
             else {
                 $key = $value = $opt;
             }
-            ($value // '') eq @current.any ?? ($key, $value, True)
-                                           !! ($key, $value);
+            ($value // '') eq @current.map({ $_ // '' }).any
+              ?? ($key, $value, True)
+              !! ($key, $value);
         }]
     }
 
@@ -727,10 +756,20 @@ role Cro::WebApp::Form {
             $_
         }
         else {
-            # Fall back to mangling the attribute name.
-            my @words = $attr.name.substr(2).split('-');
-            @words[0] .= tclc;
-            @words.join(' ')
+            # Fall back to default label generator...
+            my @words = $attr
+              .name
+              .substr(2);
+
+            # ...which the user can opt to not split on '-' or '_'
+            unless $attr.?webapp-label-not-split {
+              @words = @words
+                .split(/ '-' | '_' /)
+                .map( *.tc )
+                .join(' ')
+            }
+
+            @words;
         }
     }
 
@@ -949,6 +988,38 @@ role Cro::WebApp::Form {
     method add-validation-error($message --> Nil) {
         $!validation-state.add-custom-error($message);
     }
+
+    method !set-form-ro (Bool() $ro) {
+        for self.^attributes {
+            $_ does FormProperties unless $_ ~~ FormProperties;
+
+            .webapp-form-ro = $ro
+        }
+    }
+
+    method ro { self!set-form-ro(True) ; self }
+    method rw { self!set-form-ro(False); self }
+
+    multi method add-option (Attribute $a, Str $option) {
+        samewith( |Pair.new($option, $option) );
+    }
+    multi method add-option (
+        Attribute  $a,
+        Pair       $p,
+                  :$index = 0,
+    ) {
+        my $o = $a.webapp-form-select;
+        return unless $o;
+
+        my $w = sub ( *@a ) {
+            my $no = $o.().Array;
+
+            $no.splice($index, 0, $p);
+            $no;
+        }
+        $a.webapp-form-select = $w;
+    }
+
 }
 
 #| Take the submitted data in the request body and parse it into a form object of
