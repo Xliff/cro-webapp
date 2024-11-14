@@ -391,12 +391,30 @@ role Cro::WebApp::Form {
         self.CREATE
     }
 
+    method is-readable ($_) {
+      state @blacklisted = (
+        |Cro::WebApp::Form.^attributes.map( *.name ),
+        |FormProperties.^attributes.map( *.name )
+      );
+
+      return False if @blacklisted.first(.name).defined;
+      return True if .has_accessor;
+
+      my $n = .name.substr(2);
+      if .package.^can($n).head -> $m {
+        $_ does FormProperties unless $_ ~~ FormProperties;
+        .webapp-form-ro = $m.rw.not;
+        return True;
+      }
+      False;
+    }
+
     #| Get the attributes involved in the form, sorted most deeply
     #| inherited first, then modifed by optional sort-order trait.
     method !form-attributes() {
         my @a1 = self.^mro.reverse.map(
           *.^attributes(:local)
-        ).flat.grep( *.has_accessor );
+        ).flat.grep({ self.is-readable($_) });
 
         my @a2 = @a1.clone;
 
@@ -419,7 +437,9 @@ role Cro::WebApp::Form {
         my %values;
         for self!form-attributes() -> Attribute $attr {
             my $name = $attr.name.substr(2);
-            %values{$name} = $attr.get_value(self);
+            #%values{$name} = $attr.get_value(self) // self."$name"();
+            %values{$name} = self."{ $name }"();
+            $*ERR.say( "V ({ $name }): { %values{$name} }" );
         }
         %values
     }
@@ -589,27 +609,26 @@ role Cro::WebApp::Form {
     method !calculate-control-type(Attribute $attr) {
         # See if we've been explicitly told what it is.
         my %properties;
+
+        my $an  = $attr.name.substr(2);
+        my $val = self."{ $an }"();
+
         with $attr.?webapp-form-custom {
           when Str {
             my $template = .subst('template:', '');
 
             load-template(
               self.template-dir.add($template)
-            ).render(
-              val => $attr.get_value(self)
-            )
+            ).render( :$val )
           }
 
           %properties<value> = do {
             when Method   {
-                $attr.webapp-form-custom.(
-                  self,
-                  $attr.get_value(self)
-                )
+                $attr.webapp-form-custom.(self, $val)
             }
 
             when Callable {
-                $attr.webapp-form-custom.( $attr.get_value(self) )
+                $attr.webapp-form-custom.($val)
             }
           }
           return 'custom', %properties;
@@ -617,19 +636,19 @@ role Cro::WebApp::Form {
         with $attr.?webapp-form-type {
             # Some of these are are special, some not just text-like.
             when 'number' {
-                return self!calculate-numeric-control-type($attr);
+                return self!calculate-numeric-control-type($an, $val, $attr);
             }
             when 'email' | 'search' | 'tel' | 'url' | 'password' {
                 ensure-acceptable-type($attr);
-                return self!calculate-text-control-type($attr, $_);
+                return self!calculate-text-control-type($attr, $an, $val, $_);
             }
             default {
                 ensure-acceptable-type($attr);
-                return $_, self!add-current-value($attr);
+                return $_, self!add-current-value($an, $val);
             }
         }
         with $attr.?webapp-form-select {
-            my %properties = options => self!calculate-options($attr, $_);
+            my %properties = options => self!calculate-options($val, $_);
             if $attr.type ~~ Positional {
                 ensure-acceptable-type($attr, $attr.type.of);
                 %properties<multi> = True;
@@ -642,45 +661,57 @@ role Cro::WebApp::Form {
         }
         with $attr.?webapp-form-multiline {
             ensure-acceptable-type($attr);
-            return self!calculate-text-control-type($attr, 'textarea', $_);
+            return self!calculate-text-control-type(
+              $attr,
+              $an,
+              $val,
+              'textarea',
+              $_
+            );
         }
 
         # Otherwise, look at the type-specific cases; booleans become checkboxes, and
         # numerics become number.
         unless $attr.type =:= Mu {
             if $attr.type ~~ Bool {
-                return 'checkbox', self!add-current-value($attr);
+                return 'checkbox', self!add-current-value($an, $val);
             }
             if $attr.type ~~ Real {
-                return self!calculate-numeric-control-type($attr);
+                return self!calculate-numeric-control-type($an, $val, $attr);
             }
             if $attr.type ~~ Date {
-                return 'date', self!add-current-value($attr);
+                return 'date', self!add-current-value($an, $val);
             }
             if $attr.type ~~ DateTime {
-                return 'datetime-local', self!add-current-value($attr);
+                return 'datetime-local', self!add-current-value($an, $val);
             }
             if $attr.type ~~ Cro::WebApp::Form {
-                return 'object', self!add-current-value($attr);
+                return 'object', self!add-current-value($an, $val);
             }
         }
 
         # Otherwise, we're looking at a text property.
         ensure-acceptable-type($attr);
-        return self!calculate-text-control-type($attr);
+        return self!calculate-text-control-type($attr, $an, $val);
     }
 
-    method !calculate-text-control-type(Attribute $attr, $type = 'text', %properties? is copy) {
+    method !calculate-text-control-type(
+      $attr,
+      $an,
+      $val,
+      $type  = 'text',
+      %properties? is copy
+    ) {
         with $attr.?webapp-form-minlength {
             %properties<minlength> = ~$_;
         }
         with $attr.?webapp-form-maxlength {
             %properties<maxlength> = ~$_;
         }
-        return $type, self!add-current-value($attr, %properties)
+        return $type, self!add-current-value($an, $val, %properties)
     }
 
-    method !calculate-numeric-control-type(Attribute $attr) {
+    method !calculate-numeric-control-type($an, $val, Attribute $attr) {
         my %min-max;
         with $attr.?webapp-form-min {
             %min-max<min> = ~$_;
@@ -688,11 +719,11 @@ role Cro::WebApp::Form {
         with $attr.?webapp-form-max {
             %min-max<max> = ~$_;
         }
-        return 'number', self!add-current-value($attr, %min-max);
+        return 'number', self!add-current-value($an, $val, %min-max);
     }
 
-    method !add-current-value(Attribute $attr, %properties? is copy) {
-        with $attr.get_value(self) {
+    method !add-current-value($name, $val, %properties? is copy) {
+        with $val {
             when Date { %properties<value> = .yyyy-mm-dd; }
 
             when DateTime {
@@ -718,14 +749,14 @@ role Cro::WebApp::Form {
 
             default { %properties<value> = $_; }
         }
-        orwith %!unparseable{$attr.name.substr(2)} {
+        orwith %!unparseable{$name} {
             %properties<value> = $_;
         }
         return %properties;
     }
 
-    method !calculate-options(Attribute $attr, &option-producer) {
-        my @current := $attr.get_value(self).Array;
+    method !calculate-options($val, &option-producer) {
+        my @current := $val.Array;
         [option-producer(self).list.map: -> $opt {
             my ($key, $value);
             if $opt ~~ Pair {
@@ -745,7 +776,14 @@ role Cro::WebApp::Form {
         ensure-acceptable-type($attr, $attr.type);
     }
     multi sub ensure-acceptable-type(Attribute $attr, Mu $type --> Nil) {
-        unless $type ~~ Str || $type ~~ Real || $type ~~ Date || $type ~~ DateTime || $type ~~ Cro::HTTP::Body::MultiPartFormData::Part || Any ~~ $type {
+        unless [||](
+          $type ~~ Str,
+          $type ~~ Real,
+          $type ~~ Date,
+          $type ~~ DateTime,
+          $type ~~ Cro::HTTP::Body::MultiPartFormData::Part,
+          Any ~~ $type
+        ) {
             die "Don't know how to handle type '$type.^name()' of '$attr.name()' in a form";
         }
     }
@@ -865,9 +903,10 @@ role Cro::WebApp::Form {
 
         # Add per field validation errors.
         for self!form-attributes() -> Attribute $attr {
-            my $name = $attr.name.substr(2);
+            my $name  = $attr.name.substr(2);
             my $value = $attr.get_value(self);
-            my $type = $attr.type;
+            my $type  = $attr.type;
+
             $type = Str if Any ~~ $type;
 
             # We check for unparseables first, so we don't have to consider them in any
