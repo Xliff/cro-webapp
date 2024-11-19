@@ -29,19 +29,26 @@ my class Template does ContainerNode is export {
         my %*TEMPLATE-EXPORTS = :sub{}, :macro{};
 
         class TemplateMu {
-          method FALLBACK ($, *@) { Nil   }
-          method Str              { ''    }
-          method so               { False }
-          method elems            { 0     }
-          method Hash             { %()   }
-          method Array            { []    }
-          method values           { []    }
-          method keys             { []    }
-          method pairs            { []    }
+          method FALLBACK ($, *@) { Nil     }
+          method Str              { ''      }
+          method so               { False   }
+          method elems            { 0       }
+          method Hash             { ().Hash }
+          method Array            { []      }
+          method values           { []      }
+          method keys             { []      }
+          method pairs            { []      }
+          method Numeric          { $.Num   }
+          method Int              { 0       }
+          method Num              { 0e0     }
+          method Real             { $.Num   }
         }
 
-        my $renderer = EVAL
-          'sub ($_) { join "", (' ~ $children-compiled ~ ') }';
+        my $renderer = EVAL [~](
+          'sub ($_) { my \TMu = TemplateMu.new; join "", (',
+          $children-compiled,
+          ') }'
+        );
 
         return Map.new((:$renderer, exports => %*TEMPLATE-EXPORTS, :@!used-files));
     }
@@ -101,13 +108,13 @@ my role Argument does Node is export {
 
 my class SmartDeref does Node is export {
     has Node $.target is required;
-    has Str $.symbol is required;
+    has Str  $.symbol is required;
 
     method compile() {
         '(given (' ~ $!target.compile ~
             ') { .does(Associative) ?? ((.<' ~ $!symbol ~ '>:exists) ?? .<' ~
             $!symbol ~ '> !! .?' ~ $!symbol ~ ') !! (.' ~ $!symbol ~
-            " // TemplateMu) })"
+            " // TMu) })"
             #" // '') })"
     }
 }
