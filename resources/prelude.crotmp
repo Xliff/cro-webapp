@@ -1,7 +1,7 @@
 <:sub class($maybe-class)><?$maybe-class> class="<$maybe-class>"</?></:>
 <:sub class-name($maybe-class)><?$maybe-class><$maybe-class></?></:>
-<:sub control-class($_, $control-class, :$is-invalid-class, :$prefix = '')>
-  class="<&class-name($control-class)><?.<validation-errors>><&class-name($is-invalid-class)></?>"
+<:sub control-class($_, $control-class, :$is-invalid-class, :$prefix = '', :$form-link = False)>
+  class="<&class-name($control-class)><?.<validation-errors>><&class-name($is-invalid-class)><?$form-link> form-link</?></?>"
   <?.<help>>aria-describedby="<&fieldName($prefix, .name)>_help"</?>
 </:>
 <:sub rows-cols($rows, $cols)><?$rows> rows="<$rows>"</?><?$cols> cols="<$cols>"</?></:>
@@ -52,7 +52,17 @@
      <?{ .type eq 'text' || .type eq 'email' || .type eq 'search' || .type eq 'url' || .type eq 'tel' }>
        <div<&class($input-group-class)>>
          <label for="<&fieldName($prefix, .name)>"<&class($input-label-class)>><.label></label>
-         <input type="<.type>" <?.read-only>disabled</?><!>name="<&fieldName($prefix, .name)>"</!> id="<&fieldName($prefix, .name)>"<&control-class($_, $input-control-class, :$is-invalid-class)><&str-opts($_, :$prefix)><?.<value>.defined()> value="<.value>"</?>>
+         <?{ .read-only && .form-link }>
+           <div class="form-control form-link" data-link="<.form-link>"><.value></div>
+         </?>
+         <!>
+           <input type="<.type>"
+             <?.read-only>disabled</?>
+             <!>name="<&fieldName($prefix, .name)>"</!>
+             id="<&fieldName($prefix, .name)>"
+             <&control-class($_, $input-control-class, :$is-invalid-class)>
+             <&str-opts($_, :$prefix)><?.<value>.defined()> value="<.value>"</?> />
+         </!>
          <?.read-only><input name="<&fieldName($prefix, .name)>" type="hidden" value="<.value>"></?>
          <&control-help($_,  :$help-class)>
          <&control-validation-message($_, :$invalid-feedback-class)>

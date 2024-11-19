@@ -22,6 +22,7 @@ my role FormProperties {
     has Bool  $.webapp-form-checkbox-right  is rw;
     has       &.webapp-form-custom          is rw;
     has Int   $.webapp-form-position        is rw;
+    has Str   $.webapp-form-link            is rw;
 }
 
 sub add-form-properties-to-attribute ($a) is export {
@@ -218,6 +219,11 @@ multi trait_mod:<is>(Attribute:D $attr, Bool :$invisible! --> Nil) is export {
 multi trait_mod:<is>(Attribute:D $attr, Bool :$form-checkbox-right! --> Nil) is export {
     ensure-attr-state($attr);
     $attr.webapp-form-checkbox-right = $form-checkbox-right;
+}
+
+multi trait_mod:<is> (Attribute:D $attr, Str :$form-link! --> Nil) is export {
+  $attr.webapp-form-link = $form-link;
+  say "{ $attr.name } form linked to '{ $form-link }'";
 }
 
 #| Provide code that will be run in order to produce the values to select from. Should
@@ -439,7 +445,6 @@ role Cro::WebApp::Form {
             my $name = $attr.name.substr(2);
             #%values{$name} = $attr.get_value(self) // self."$name"();
             %values{$name} = self."{ $name }"();
-            $*ERR.say( "V ({ $name }): { %values{$name} }" );
         }
         %values
     }
@@ -559,16 +564,25 @@ role Cro::WebApp::Form {
             my $name = $attr.name.substr(2);
             die X::Cro::WebApp::Form::FileInGET.new :form(::?CLASS.^name) :element($name)
                 if $control-type eq 'file' && $method eq 'get';
+
+            my $pv := %properties<value>;
+            my $fl  = $attr.?webapp-form-link;
+            $fl  = $fl && %properties<value>
+              ?? $fl.subst('##', $pv, :g)
+              !! '';
+
             my %control =
                     :$name,
-                    label => self!calculate-label($attr),
-                    (with $attr.?webapp-form-help { help => $_ }),
-                    (with $attr.?webapp-form-placeholder { placeholder => $_ }),
-                    (with $attr.?webapp-form-checkbox-right { checkbox-right => $_ }),
-                    (with $attr.?webapp-form-ro { read-only => $_ }),
+
+                    label       => self!calculate-label($attr),
                     required    => ?$attr.required,
                     type        => $control-type,
 
+                    (with $attr.?webapp-form-help           { help           => $_  }),
+                    (with $attr.?webapp-form-placeholder    { placeholder    => $_  }),
+                    (with $attr.?webapp-form-checkbox-right { checkbox-right => $_  }),
+                    (with $attr.?webapp-form-ro             { read-only      => $_  }),
+                    (with $attr.?webapp-form-link           { form-link      => $fl }),
                     |%properties;
 
             if %validation-by-control{$name} -> @errors {
