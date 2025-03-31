@@ -15,7 +15,29 @@ my role ContainerNode does Node {
 my class Template does ContainerNode is export {
     has @.used-files;
 
+    class TemplateMu {
+      method FALLBACK ($, *@) { self    }
+      method Str              { ''      }
+      method so               { False   }
+      method elems            { 0       }
+      method Hash             { ().Hash }
+      method Array            { []      }
+      method values           { []      }
+      method keys             { []      }
+      method pairs            { []      }
+      method Numeric          { $.Num   }
+      method Int              { 0       }
+      method Num              { 0e0     }
+      method Real             { $.Num   }
+      method defined          { False   }
+      method chars            { 9       }
+    }
+
+    my \TMu = TemplateMu.new;
+
     method compile() {
+        state $E = 0;
+
         my $*IN-SUB = False;
         my $pre-amble = False;
         my $children-compiled = @!children.map(*.compile).join(", ");
@@ -28,27 +50,21 @@ my class Template does ContainerNode is export {
         }
         my %*TEMPLATE-EXPORTS = :sub{}, :macro{};
 
-        class TemplateMu {
-          method FALLBACK ($, *@) { Nil     }
-          method Str              { ''      }
-          method so               { False   }
-          method elems            { 0       }
-          method Hash             { ().Hash }
-          method Array            { []      }
-          method values           { []      }
-          method keys             { []      }
-          method pairs            { []      }
-          method Numeric          { $.Num   }
-          method Int              { 0       }
-          method Num              { 0e0     }
-          method Real             { $.Num   }
-        }
-
-        my $renderer = EVAL [~](
-          'sub ($_) { my \TMu = TemplateMu.new; join "", (',
+        my $template-code = [~](
+          'sub ($_) { join "", (',
           $children-compiled,
           ') }'
         );
+
+        if DYNAMIC::<$*TEMPLATE-DEBUG> || %*ENV<GLOBAL_TEMPLATE_DEBUG> {
+          say "\n\nTEMPLATE-CODE \n--------------";
+          my $l = $template-code.lines.elems.log(10).Int.succ;
+          for $template-code.lines.kv -> $k, $v {
+            say "{ $k.succ.fmt("\%0{$l}d") }: { $v }";
+          }
+        }
+
+        my $renderer = EVAL $template-code;
 
         return Map.new((:$renderer, exports => %*TEMPLATE-EXPORTS, :@!used-files));
     }
@@ -111,11 +127,10 @@ my class SmartDeref does Node is export {
     has Str  $.symbol is required;
 
     method compile() {
-        '(given (' ~ $!target.compile ~
+        '( (given (' ~ $!target.compile ~
             ') { .does(Associative) ?? ((.<' ~ $!symbol ~ '>:exists) ?? .<' ~
             $!symbol ~ '> !! .?' ~ $!symbol ~ ') !! (.' ~ $!symbol ~
-            " // TMu) })"
-            #" // '') })"
+            ") }) // TMu )"
     }
 }
 
