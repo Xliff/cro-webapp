@@ -51,7 +51,7 @@ my class Template does ContainerNode is export {
         my %*TEMPLATE-EXPORTS = :sub{}, :macro{};
 
         my $template-code = [~](
-          'sub ($_) { join "", (',
+          qq«sub TC{ $E++ } (\$_) \{ join "", (»,
           $children-compiled,
           ') }'
         );
